@@ -1,0 +1,117 @@
+@import "tailwindcss";
+
+/* Enable class-based dark mode so App.tsx's `document.documentElement.classList.add('dark')`
+   toggle drives all `dark:` utilities (Tailwind v4 defaults to prefers-color-scheme otherwise). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  /* ---------------------------------------------------------------
+     Material Design 3 color tokens (light scheme, clinical blue).
+     `dark:` utilities in the markup reuse these same tokens, whose
+     M3 semantics already read correctly on dark surfaces
+     (e.g. `dark:text-inverse-on-surface`, `dark:text-primary-fixed`).
+     --------------------------------------------------------------- */
+
+  /* Primary */
+  --color-primary: #0b6bcb;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #d6e3ff;
+  --color-on-primary-container: #001b3d;
+  --color-primary-fixed: #d6e3ff;
+  --color-on-primary-fixed-variant: #274b73;
+
+  /* Secondary (used for "full team" green states) */
+  --color-secondary: #2e7d5b;
+  --color-on-secondary: #ffffff;
+  --color-secondary-container: #b4f1cd;
+  --color-on-secondary-container: #05210f;
+  --color-secondary-fixed: #b4f1cd;
+
+  /* Tertiary (evening-shift accents) */
+  --color-tertiary: #7c5cbf;
+  --color-on-tertiary: #ffffff;
+  --color-tertiary-container: #e9ddff;
+  --color-tertiary-fixed: #e9ddff;
+
+  /* Error */
+  --color-error: #ba1a1a;
+  --color-on-error: #ffffff;
+  --color-error-container: #ffdad6;
+  --color-on-error-container: #410002;
+
+  /* Surfaces & background */
+  --color-background: #f8f9ff;
+  --color-surface: #f8f9ff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f1f3fa;
+  --color-surface-container: #ebedf4;
+  --color-surface-container-high: #e5e7ee;
+  --color-surface-container-highest: #dfe2e9;
+
+  /* Content & outlines */
+  --color-on-surface: #1a1c1e;
+  --color-on-surface-variant: #43474e;
+  --color-outline: #73777f;
+  --color-outline-variant: #c3c7cf;
+  --color-inverse-on-surface: #f1f0f7;
+
+  /* Spacing uses Tailwind's built-in numeric scale (gap-4, p-4, space-y-6, …)
+     — no custom size tokens, so `max-w-md` etc. keep their normal widths. */
+
+  /* ---------------------------------------------------------------
+     Typography scale (drives text-* size utilities)
+     --------------------------------------------------------------- */
+  --text-headline-lg-mobile: 1.75rem;
+  --text-headline-lg-mobile--line-height: 2.125rem;
+  --text-headline-md: 1.5rem;
+  --text-headline-md--line-height: 2rem;
+  --text-headline-sm: 1.125rem;
+  --text-headline-sm--line-height: 1.5rem;
+  --text-body-lg: 1rem;
+  --text-body-lg--line-height: 1.5rem;
+  --text-body-md: 0.9375rem;
+  --text-body-md--line-height: 1.375rem;
+  --text-label-caps: 0.6875rem;
+  --text-label-caps--line-height: 1rem;
+  --text-label-sm: 0.6875rem;
+  --text-label-sm--line-height: 1rem;
+
+  /* ---------------------------------------------------------------
+     Custom animations
+     --------------------------------------------------------------- */
+  --animate-spin-slow: spin-slow 3s linear infinite;
+  --animate-fade-in: fade-in 0.3s ease-out both;
+}
+
+/* Font-weight helpers used alongside the headline/label text sizes. */
+@utility font-headline-sm {
+  font-weight: 600;
+}
+@utility font-headline-md {
+  font-weight: 700;
+}
+@utility font-label-sm {
+  font-weight: 600;
+}
+
+/* Safe-area bottom padding for the fixed iOS-style nav bar. */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

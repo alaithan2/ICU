@@ -1,0 +1,305 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState } from 'react';
+import { Consultant, Holiday } from '../types';
+import { Sun, Moon, Plus, Trash2, ShieldAlert, Check, Heart, UserPlus, Sparkles, X } from 'lucide-react';
+
+interface SettingsProps {
+  consultants: Consultant[];
+  holidays: Holiday[];
+  darkMode: boolean;
+  onToggleDarkMode: () => void;
+  onAddConsultant: (name: string, role: string, avatar?: string) => void;
+  onDeleteConsultant: (id: string) => void;
+  onAddHoliday: (name: string, date: string) => void;
+  onDeleteHoliday: (id: string) => void;
+}
+
+export default function Settings({
+  consultants,
+  holidays,
+  darkMode,
+  onToggleDarkMode,
+  onAddConsultant,
+  onDeleteConsultant,
+  onAddHoliday,
+  onDeleteHoliday
+}: SettingsProps) {
+  // Modal states
+  const [showAddConsultantModal, setShowAddConsultantModal] = useState(false);
+  const [newConsultantName, setNewConsultantName] = useState('');
+  const [newConsultantRole, setNewConsultantRole] = useState('Senior Consultant');
+  const [newConsultantAvatar, setNewConsultantAvatar] = useState('');
+
+  const [showAddHolidayModal, setShowAddHolidayModal] = useState(false);
+  const [newHolidayName, setNewHolidayName] = useState('');
+  const [newHolidayDate, setNewHolidayDate] = useState('');
+
+  const handleAddConsultantSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newConsultantName) return;
+    onAddConsultant(newConsultantName, newConsultantRole, newConsultantAvatar);
+    setNewConsultantName('');
+    setNewConsultantRole('Senior Consultant');
+    setNewConsultantAvatar('');
+    setShowAddConsultantModal(false);
+  };
+
+  const handleAddHolidaySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newHolidayName || !newHolidayDate) return;
+    onAddHoliday(newHolidayName, newHolidayDate);
+    setNewHolidayName('');
+    setNewHolidayDate('');
+    setShowAddHolidayModal(false);
+  };
+
+  return (
+    <div id="settings-view" className="space-y-6">
+      {/* App Theme Section (iOS Style) */}
+      <section className="space-y-3">
+        <h3 className="px-4 text-label-sm font-label-sm text-on-surface-variant uppercase tracking-widest">
+          Display
+        </h3>
+        <div className="bg-surface-container-low rounded-xl overflow-hidden shadow-sm border border-outline-variant/10">
+          <div className="flex items-center justify-between px-4 py-3 hover:bg-surface-container-high/40 transition-colors">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-primary-container flex items-center justify-center">
+                {darkMode ? (
+                  <Moon className="w-5 h-5 text-on-primary-container" />
+                ) : (
+                  <Sun className="w-5 h-5 text-on-primary-container" />
+                )}
+              </div>
+              <span className="text-body-lg font-bold">Dark Mode</span>
+            </div>
+            <label className="relative inline-flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={darkMode}
+                onChange={onToggleDarkMode}
+                className="sr-only peer"
+              />
+              <div className="w-12 h-7 bg-outline-variant/30 rounded-full transition-colors peer-checked:bg-[#34c759] after:content-[''] after:absolute after:top-1 after:left-1 after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-5" />
+            </label>
+          </div>
+        </div>
+      </section>
+
+      {/* Manage Consultants Section */}
+      <section className="space-y-3">
+        <div className="flex items-center justify-between px-4">
+          <h3 className="text-label-sm font-label-sm text-on-surface-variant uppercase tracking-widest">
+            Manage Consultants
+          </h3>
+          <button
+            onClick={() => setShowAddConsultantModal(true)}
+            className="text-primary font-bold text-headline-sm flex items-center gap-2 active:scale-95 transition-transform cursor-pointer"
+          >
+            <Plus className="w-4 h-4" /> Add New
+          </button>
+        </div>
+        <div className="bg-surface-container-low rounded-xl overflow-hidden shadow-sm border border-outline-variant/10 divide-y divide-outline-variant/20">
+          {consultants.map(c => (
+            <div
+              key={c.id}
+              className="flex items-center justify-between px-4 py-3 group hover:bg-surface-container-high/40 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="relative shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-surface-container-highest border border-outline-variant/30 overflow-hidden">
+                    <img src={c.avatar} alt={c.name} className="w-full h-full object-cover" />
+                  </div>
+                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#34c759] border-2 border-surface-container-low rounded-full" />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <span className="text-body-lg font-bold text-on-surface truncate">{c.name}</span>
+                  <span className="text-label-sm font-label-sm text-on-surface-variant truncate">{c.role}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => onDeleteConsultant(c.id)}
+                disabled={consultants.length <= 2} // Safety block so we always have consultants
+                className="text-error/70 hover:text-error p-1 hover:bg-error-container/20 rounded-lg active:scale-95 transition-transform disabled:opacity-30 cursor-pointer"
+                title="Remove Consultant"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Official Holidays Section */}
+      <section className="space-y-3">
+        <h3 className="px-4 text-label-sm font-label-sm text-on-surface-variant uppercase tracking-widest">
+          Official Holidays
+        </h3>
+        <div className="bg-surface-container-low rounded-xl p-4 shadow-sm border border-outline-variant/10 space-y-4">
+          {/* Holiday List */}
+          <div className="space-y-2">
+            {holidays.map(h => (
+              <div
+                key={h.id}
+                className="flex items-center justify-between p-3 bg-surface-container-lowest rounded-lg border border-outline-variant/10"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-1.5 h-6 bg-tertiary rounded-full" />
+                  <div>
+                    <p className="text-body-md font-bold text-on-surface">{h.name}</p>
+                    <p className="text-label-sm text-on-surface-variant">
+                      {new Date(h.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => onDeleteHoliday(h.id)}
+                  className="text-error/70 hover:text-error p-1 hover:bg-error-container/25 rounded-lg active:scale-90 transition-transform cursor-pointer"
+                >
+                  <Trash2 className="w-4.5 h-4.5" />
+                </button>
+              </div>
+            ))}
+
+            <button
+              onClick={() => setShowAddHolidayModal(true)}
+              className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-outline-variant/30 rounded-lg text-outline hover:border-primary/50 hover:text-primary transition-all active:scale-[0.98] cursor-pointer"
+            >
+              <Plus className="w-4.5 h-4.5" />
+              <span className="text-label-sm font-label-sm font-bold">Add New Holiday Event</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {/* System Health Block (Bento Style) */}
+      <section className="bg-primary p-4 rounded-xl text-white shadow-md overflow-hidden relative border border-primary/25">
+        <div className="relative z-10 space-y-2">
+          <h4 className="text-headline-sm font-headline-sm font-bold flex items-center gap-1">
+            <Heart className="w-5 h-5 text-white fill-white/20 animate-pulse" /> System Health
+          </h4>
+          <p className="text-label-sm opacity-80 mb-3">
+            All clinical shift automated rotations are active and fully operational.
+          </p>
+          <div className="flex items-center gap-2 text-[11px] font-bold bg-white/15 px-2.5 py-1 rounded-full w-max">
+            <span className="w-2 h-2 bg-emerald-400 rounded-full animate-ping" />
+            LIVE SYNCING & SECURED
+          </div>
+        </div>
+        <Sparkles className="absolute -right-4 -bottom-4 w-28 h-28 opacity-10 rotate-12" />
+      </section>
+
+      {/* Footer copyright */}
+      <footer className="pt-8 text-center space-y-2 opacity-50 pb-12">
+        <p className="text-label-sm font-semibold">ICU Consultant Management System v4.2.0</p>
+        <p className="text-[10px] uppercase tracking-widest">© 2026 Clinical Operations Dept.</p>
+      </footer>
+
+      {/* Modal - Add Consultant */}
+      {showAddConsultantModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-surface-container-lowest w-full max-w-md rounded-2xl p-4 border border-outline-variant/30 shadow-2xl space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between border-b border-outline-variant/10 pb-3">
+              <h3 className="font-headline-md text-headline-sm text-on-surface flex items-center gap-2">
+                <UserPlus className="w-5 h-5 text-primary" /> Add Consultant
+              </h3>
+              <button onClick={() => setShowAddConsultantModal(false)} className="text-outline hover:text-on-surface">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddConsultantSubmit} className="space-y-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Full Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Dr. Jane Smith"
+                  value={newConsultantName}
+                  onChange={(e) => setNewConsultantName(e.target.value)}
+                  className="bg-surface-container border-none rounded-xl p-4 text-body-md text-on-surface focus:ring-2 focus:ring-primary outline-none"
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Designation Role</label>
+                <select
+                  value={newConsultantRole}
+                  onChange={(e) => setNewConsultantRole(e.target.value)}
+                  className="bg-surface-container border-none rounded-xl p-4 text-body-md text-on-surface focus:ring-2 focus:ring-primary outline-none"
+                >
+                  <option value="Senior Consultant">Senior Consultant</option>
+                  <option value="Intensivist">Intensivist</option>
+                  <option value="Assistant Consultant">Assistant Consultant</option>
+                  <option value="Fellow">Fellow</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Avatar Photo URL (Optional)</label>
+                <input
+                  type="url"
+                  placeholder="Leave empty for professional avatar fallback"
+                  value={newConsultantAvatar}
+                  onChange={(e) => setNewConsultantAvatar(e.target.value)}
+                  className="bg-surface-container border-none rounded-xl p-4 text-body-md text-on-surface focus:ring-2 focus:ring-primary outline-none"
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full h-12 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                Add Consultant Profile
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal - Add Holiday */}
+      {showAddHolidayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-surface-container-lowest w-full max-w-md rounded-2xl p-4 border border-outline-variant/30 shadow-2xl space-y-4 animate-fade-in">
+            <div className="flex items-center justify-between border-b border-outline-variant/10 pb-3">
+              <h3 className="font-headline-md text-headline-sm text-on-surface flex items-center gap-2">
+                Add Holiday Event
+              </h3>
+              <button onClick={() => setShowAddHolidayModal(false)} className="text-outline hover:text-on-surface">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <form onSubmit={handleAddHolidaySubmit} className="space-y-4">
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Holiday Name</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Labor Day"
+                  value={newHolidayName}
+                  onChange={(e) => setNewHolidayName(e.target.value)}
+                  className="bg-surface-container border-none rounded-xl p-4 text-body-md text-on-surface focus:ring-2 focus:ring-primary outline-none"
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Event Date</label>
+                <input
+                  type="date"
+                  value={newHolidayDate}
+                  onChange={(e) => setNewHolidayDate(e.target.value)}
+                  className="bg-surface-container border-none rounded-xl p-4 text-body-md text-on-surface focus:ring-2 focus:ring-primary outline-none"
+                  required
+                />
+              </div>
+              <button
+                type="submit"
+                className="w-full h-12 bg-primary hover:bg-primary-container text-on-primary font-bold rounded-xl shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                Create Holiday Event
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

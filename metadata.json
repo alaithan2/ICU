@@ -1,0 +1,6 @@
+{
+  "name": "ICU Consultant",
+  "description": "High-stakes intensive care unit roster and schedule management platform featuring rest-period warning conflict safety checks, automated rotations, and analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
