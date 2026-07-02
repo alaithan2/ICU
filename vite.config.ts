@@ -3,8 +3,11 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
 
-export default defineConfig(() => {
+export default defineConfig(({command}) => {
   return {
+    // Served from https://alaithan2.github.io/ICU/ in production (GitHub Pages),
+    // but from the root during local dev.
+    base: command === 'build' ? '/ICU/' : '/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
