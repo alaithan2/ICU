@@ -83,9 +83,9 @@ export default function ManualBuilder({
           <div className="grid grid-cols-3 gap-2">
             {(['Morning', 'Evening', 'Night'] as ShiftType[]).map((type) => {
               const colors: Record<ShiftType, string> = {
-                Morning: 'peer-checked:bg-primary/10 peer-checked:text-primary peer-checked:border-primary',
+                Morning: 'peer-checked:bg-secondary/10 peer-checked:text-secondary peer-checked:border-secondary',
                 Evening: 'peer-checked:bg-tertiary/10 peer-checked:text-tertiary peer-checked:border-tertiary',
-                Night: 'peer-checked:bg-on-primary-fixed-variant/10 peer-checked:text-on-primary-fixed-variant peer-checked:border-on-primary-fixed-variant',
+                Night: 'peer-checked:bg-primary/10 peer-checked:text-primary peer-checked:border-primary',
               };
 
               return (

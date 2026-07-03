@@ -241,9 +241,9 @@ export default function DailyList({
                   {/* Morning Shift */}
                   <div className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 first:pt-0">
                     <div className="flex items-start gap-4">
-                      <div className="w-1 bg-primary self-stretch rounded-full" />
+                      <div className="w-1 bg-secondary self-stretch rounded-full" />
                       <div>
-                        <span className="text-label-caps text-primary uppercase font-bold text-[11px] block">
+                        <span className="text-label-caps text-secondary uppercase font-bold text-[11px] block">
                           Morning (08:00 - 16:00)
                         </span>
                         {mConsultant ? (
@@ -279,7 +279,7 @@ export default function DailyList({
                   {/* Evening Shift */}
                   <div className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div className="flex items-start gap-4">
-                      <div className="w-1 bg-tertiary-container rounded-full self-stretch" />
+                      <div className="w-1 bg-tertiary rounded-full self-stretch" />
                       <div>
                         <span className="text-label-caps text-tertiary uppercase font-bold text-[11px] block">
                           Evening (16:01 - 00:00)
@@ -317,9 +317,9 @@ export default function DailyList({
                   {/* Night Shift */}
                   <div className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 last:pb-0">
                     <div className="flex items-start gap-4">
-                      <div className="w-1 bg-on-primary-fixed-variant rounded-full self-stretch" />
+                      <div className="w-1 bg-primary rounded-full self-stretch" />
                       <div>
-                        <span className="text-label-caps text-on-primary-fixed-variant uppercase font-bold text-[11px] block">
+                        <span className="text-label-caps text-primary uppercase font-bold text-[11px] block">
                           Night (00:01 - 07:59)
                         </span>
                         {nConsultant ? (

@@ -68,13 +68,13 @@ export default function MonthlyGrid({
         </h3>
         <div className="flex items-center gap-3 text-[11px] font-medium text-outline">
           <div className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-primary inline-block" /> M
+            <span className="w-2.5 h-2.5 rounded-full bg-secondary inline-block" /> M
           </div>
           <div className="flex items-center gap-1">
             <span className="w-2.5 h-2.5 rounded-full bg-tertiary inline-block" /> E
           </div>
           <div className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-on-primary-fixed-variant inline-block" /> N
+            <span className="w-2.5 h-2.5 rounded-full bg-primary inline-block" /> N
           </div>
         </div>
       </div>
@@ -125,7 +125,7 @@ export default function MonthlyGrid({
               <div className="flex flex-col gap-0.5 mt-auto">
                 {/* Morning Shift */}
                 <div className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-secondary inline-block shrink-0" />
                   <span className={`text-[9px] font-bold truncate px-0.5 py-px rounded border leading-none ${getConsultantColor(consultants, dayShifts.morning?.consultantId).soft}`}>
                     {getConsultantAbbreviation(dayShifts.morning?.consultantId)}
                   </span>
@@ -141,7 +141,7 @@ export default function MonthlyGrid({
 
                 {/* Night Shift */}
                 <div className="flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-on-primary-fixed-variant inline-block shrink-0" />
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block shrink-0" />
                   <span className={`text-[9px] font-bold truncate px-0.5 py-px rounded border leading-none ${getConsultantColor(consultants, dayShifts.night?.consultantId).soft}`}>
                     {getConsultantAbbreviation(dayShifts.night?.consultantId)}
                   </span>
