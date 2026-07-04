@@ -3,9 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Consultant, Holiday } from '../types';
-import { Sun, Moon, Plus, Trash2, ShieldAlert, Check, Heart, UserPlus, Sparkles, X } from 'lucide-react';
+import { Sun, Moon, Plus, Trash2, ShieldAlert, Check, Heart, UserPlus, Sparkles, X, Download, Upload } from 'lucide-react';
 
 interface SettingsProps {
   consultants: Consultant[];
@@ -16,6 +16,8 @@ interface SettingsProps {
   onDeleteConsultant: (id: string) => void;
   onAddHoliday: (name: string, date: string) => void;
   onDeleteHoliday: (id: string) => void;
+  onExportData: () => void;
+  onImportData: (file: File) => void;
 }
 
 export default function Settings({
@@ -26,8 +28,19 @@ export default function Settings({
   onAddConsultant,
   onDeleteConsultant,
   onAddHoliday,
-  onDeleteHoliday
+  onDeleteHoliday,
+  onExportData,
+  onImportData
 }: SettingsProps) {
+  // Hidden file input used to pick a backup file to import.
+  const importInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) onImportData(file);
+    e.target.value = ''; // allow re-importing the same file
+  };
+
   // Modal states
   const [showAddConsultantModal, setShowAddConsultantModal] = useState(false);
   const [newConsultantName, setNewConsultantName] = useState('');
@@ -172,6 +185,40 @@ export default function Settings({
               <span className="text-label-sm font-label-sm font-bold">Add New Holiday Event</span>
             </button>
           </div>
+        </div>
+      </section>
+
+      {/* Data & Backup Section */}
+      <section className="space-y-3">
+        <h3 className="px-4 text-label-sm font-label-sm text-on-surface-variant uppercase tracking-widest">
+          Data &amp; Backup
+        </h3>
+        <div className="bg-surface-container-low rounded-xl p-4 shadow-sm border border-outline-variant/10 space-y-3">
+          <p className="text-label-sm text-on-surface-variant leading-relaxed">
+            Your data is saved only in this browser. Export a backup file to keep it safe or move it to
+            another device or browser, then use Import there to restore it.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={onExportData}
+              className="flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-on-primary font-bold text-sm active:scale-95 transition-all cursor-pointer shadow-sm hover:bg-primary-container"
+            >
+              <Download className="w-4 h-4" /> Export
+            </button>
+            <button
+              onClick={() => importInputRef.current?.click()}
+              className="flex items-center justify-center gap-2 py-3 rounded-xl bg-surface-container-high text-on-surface font-bold text-sm active:scale-95 transition-all cursor-pointer border border-outline-variant/20 hover:bg-surface-container-highest"
+            >
+              <Upload className="w-4 h-4" /> Import
+            </button>
+          </div>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={handleImportFile}
+          />
         </div>
       </section>
 

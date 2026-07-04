@@ -5,12 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Consultant, Shift, ShiftType, LeaveRequest, Holiday } from './types';
-import {
-  INITIAL_CONSULTANTS,
-  INITIAL_SHIFTS,
-  INITIAL_LEAVES,
-  INITIAL_HOLIDAYS
-} from './data/initialData';
+import { subscribeDataset, saveDataset } from './dataStore';
 
 import DailyList from './components/DailyList';
 import MonthlyGrid from './components/MonthlyGrid';
@@ -48,40 +43,44 @@ export default function App() {
     return false;
   });
 
-  // Initialize data from local storage or fallback to mock defaults
+  // Subscribe to Firestore for permanent, shared, real-time data.
+  // On first run (no cloud document yet), any data still in this browser's
+  // localStorage is migrated up to the cloud so nothing is lost.
   useEffect(() => {
-    const storedConsultants = localStorage.getItem('icu_consultants');
-    const storedShifts = localStorage.getItem('icu_shifts');
-    const storedLeaves = localStorage.getItem('icu_leaves');
-    const storedHolidays = localStorage.getItem('icu_holidays');
+    const subscribe = <T,>(
+      name: 'consultants' | 'shifts' | 'leaves' | 'holidays',
+      localKey: string,
+      setter: (v: T[]) => void
+    ) =>
+      subscribeDataset<T>(
+        name,
+        (items, exists) => {
+          if (exists) {
+            setter(items);
+            return;
+          }
+          // No cloud document yet — seed it from any legacy local data.
+          let local: T[] = [];
+          try {
+            const raw = localStorage.getItem(localKey);
+            const parsed = raw ? JSON.parse(raw) : [];
+            if (Array.isArray(parsed)) local = parsed as T[];
+          } catch {
+            /* ignore malformed local cache */
+          }
+          setter(local);
+          if (local.length > 0) saveDataset(name, local);
+        },
+        err => console.error(`Firestore "${name}" subscription failed:`, err)
+      );
 
-    if (storedConsultants) {
-      setConsultants(JSON.parse(storedConsultants));
-    } else {
-      setConsultants(INITIAL_CONSULTANTS);
-      localStorage.setItem('icu_consultants', JSON.stringify(INITIAL_CONSULTANTS));
-    }
-
-    if (storedShifts) {
-      setShifts(JSON.parse(storedShifts));
-    } else {
-      setShifts(INITIAL_SHIFTS);
-      localStorage.setItem('icu_shifts', JSON.stringify(INITIAL_SHIFTS));
-    }
-
-    if (storedLeaves) {
-      setLeaves(JSON.parse(storedLeaves));
-    } else {
-      setLeaves(INITIAL_LEAVES);
-      localStorage.setItem('icu_leaves', JSON.stringify(INITIAL_LEAVES));
-    }
-
-    if (storedHolidays) {
-      setHolidays(JSON.parse(storedHolidays));
-    } else {
-      setHolidays(INITIAL_HOLIDAYS);
-      localStorage.setItem('icu_holidays', JSON.stringify(INITIAL_HOLIDAYS));
-    }
+    const unsubs = [
+      subscribe<Consultant>('consultants', 'icu_consultants', setConsultants),
+      subscribe<Shift>('shifts', 'icu_shifts', setShifts),
+      subscribe<LeaveRequest>('leaves', 'icu_leaves', setLeaves),
+      subscribe<Holiday>('holidays', 'icu_holidays', setHolidays)
+    ];
+    return () => unsubs.forEach(unsub => unsub());
   }, []);
 
   // Sync dark mode class
@@ -120,7 +119,7 @@ export default function App() {
     }
 
     setShifts(updated);
-    localStorage.setItem('icu_shifts', JSON.stringify(updated));
+    saveDataset('shifts', updated);
   };
 
   // 2. Smart Auto-Fill — weekly block rotation driven by a user-defined pattern.
@@ -182,7 +181,7 @@ export default function App() {
 
     const updated = [...preservedShifts, ...monthShifts];
     setShifts(updated);
-    localStorage.setItem('icu_shifts', JSON.stringify(updated));
+    saveDataset('shifts', updated);
     alert(
       `Rota generated for ${getMonthName(currentMonth)} ${currentYear} from your weekly pattern: ` +
       `${weeksFilled.size} week(s) assigned, each fully covered by one consultant across all 3 daily shifts.`
@@ -193,13 +192,13 @@ export default function App() {
   const handleApproveLeave = (id: string) => {
     const updated = leaves.map(l => (l.id === id ? { ...l, status: 'Approved' as const } : l));
     setLeaves(updated);
-    localStorage.setItem('icu_leaves', JSON.stringify(updated));
+    saveDataset('leaves', updated);
   };
 
   const handleRejectLeave = (id: string) => {
     const updated = leaves.map(l => (l.id === id ? { ...l, status: 'Rejected' as const } : l));
     setLeaves(updated);
-    localStorage.setItem('icu_leaves', JSON.stringify(updated));
+    saveDataset('leaves', updated);
   };
 
   const handleSubmitLeave = (
@@ -225,7 +224,7 @@ export default function App() {
 
     const updated = [newRequest, ...leaves];
     setLeaves(updated);
-    localStorage.setItem('icu_leaves', JSON.stringify(updated));
+    saveDataset('leaves', updated);
   };
 
   // 4. Consultants CRUD
@@ -239,13 +238,13 @@ export default function App() {
     };
     const updated = [...consultants, newC];
     setConsultants(updated);
-    localStorage.setItem('icu_consultants', JSON.stringify(updated));
+    saveDataset('consultants', updated);
   };
 
   const handleDeleteConsultant = (id: string) => {
     const updated = consultants.filter(c => c.id !== id);
     setConsultants(updated);
-    localStorage.setItem('icu_consultants', JSON.stringify(updated));
+    saveDataset('consultants', updated);
   };
 
   // 5. Holidays CRUD
@@ -257,13 +256,13 @@ export default function App() {
     };
     const updated = [...holidays, newH];
     setHolidays(updated);
-    localStorage.setItem('icu_holidays', JSON.stringify(updated));
+    saveDataset('holidays', updated);
   };
 
   const handleDeleteHoliday = (id: string) => {
     const updated = holidays.filter(h => h.id !== id);
     setHolidays(updated);
-    localStorage.setItem('icu_holidays', JSON.stringify(updated));
+    saveDataset('holidays', updated);
   };
 
   const getMonthName = (monthIdx: number) => {
@@ -364,6 +363,60 @@ export default function App() {
     win.focus();
     // Give the new window a moment to render before invoking the print dialog.
     setTimeout(() => win.print(), 350);
+  };
+
+  // Export all app data (consultants, shifts, leaves, holidays) to a JSON backup file.
+  const handleExportData = () => {
+    const data = {
+      app: 'ICU Consultant Management System',
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      consultants,
+      shifts,
+      leaves,
+      holidays
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `icu-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  // Restore all app data from a previously exported JSON backup file.
+  const handleImportData = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result));
+        const nextConsultants = Array.isArray(parsed?.consultants) ? parsed.consultants : null;
+        const nextShifts = Array.isArray(parsed?.shifts) ? parsed.shifts : null;
+        const nextLeaves = Array.isArray(parsed?.leaves) ? parsed.leaves : null;
+        const nextHolidays = Array.isArray(parsed?.holidays) ? parsed.holidays : null;
+
+        if (!nextConsultants && !nextShifts && !nextLeaves && !nextHolidays) {
+          throw new Error('No recognizable ICU data found in this file.');
+        }
+        if (!window.confirm('Importing will REPLACE all current data (consultants, shifts, leaves, holidays) with this backup. Continue?')) {
+          return;
+        }
+
+        if (nextConsultants) { setConsultants(nextConsultants); saveDataset('consultants', nextConsultants); }
+        if (nextShifts) { setShifts(nextShifts); saveDataset('shifts', nextShifts); }
+        if (nextLeaves) { setLeaves(nextLeaves); saveDataset('leaves', nextLeaves); }
+        if (nextHolidays) { setHolidays(nextHolidays); saveDataset('holidays', nextHolidays); }
+
+        alert('Backup imported successfully.');
+      } catch (err) {
+        alert('Could not import this file. Make sure it is an ICU backup exported from this app.\n\n' + (err instanceof Error ? err.message : ''));
+      }
+    };
+    reader.onerror = () => alert('Failed to read the selected file.');
+    reader.readAsText(file);
   };
 
   return (
@@ -554,6 +607,8 @@ export default function App() {
               onDeleteConsultant={handleDeleteConsultant}
               onAddHoliday={handleAddHoliday}
               onDeleteHoliday={handleDeleteHoliday}
+              onExportData={handleExportData}
+              onImportData={handleImportData}
             />
           )}
         </section>
