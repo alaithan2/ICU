@@ -5,7 +5,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Consultant, Holiday } from '../types';
-import { Sun, Moon, Plus, Trash2, ShieldAlert, Check, Heart, UserPlus, Sparkles, X, Download, Upload, LogOut, UserCircle } from 'lucide-react';
+import { Sun, Moon, Plus, Trash2, ShieldAlert, Check, Heart, UserPlus, Sparkles, X, Download, Upload, LogOut, UserCircle, Power } from 'lucide-react';
 import { getConsultantColor, getInitials } from '../utils/consultantColors';
 
 interface SettingsProps {
@@ -58,6 +58,15 @@ export default function Settings({
     }
     onUpdateAdmins([...admins, email]);
     setNewAdminEmail('');
+  };
+
+  const handleExit = () => {
+    // Closes the window when running as an installed PWA / script-opened window.
+    // In a normal browser tab this is a no-op, so we hint the user afterwards.
+    window.close();
+    setTimeout(() => {
+      alert('You can now close this tab to exit ICU Consultant.');
+    }, 250);
   };
 
   const handleRemoveAdmin = (email: string) => {
@@ -329,6 +338,13 @@ export default function Settings({
             <LogOut className="w-4 h-4" /> Sign Out
           </button>
         </div>
+
+        <button
+          onClick={handleExit}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-surface-container-high text-on-surface font-bold text-sm active:scale-95 transition-all cursor-pointer border border-outline-variant/20"
+        >
+          <Power className="w-4 h-4" /> Exit App
+        </button>
       </section>
 
       {/* System Health Block (Bento Style) */}

@@ -1,0 +1,14 @@
+{
+  "name": "ICU Consultant",
+  "short_name": "ICU Rota",
+  "description": "ICU consultant on-call rota & leave management",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f9f9ff",
+  "theme_color": "#0058bc",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

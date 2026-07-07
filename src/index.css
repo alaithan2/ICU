@@ -163,6 +163,13 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Fill the mobile viewport (handles browser UI + installed full-screen). */
+html,
+body,
+#root {
+  min-height: 100dvh;
+}
+
 @keyframes spin-slow {
   to {
     transform: rotate(360deg);
