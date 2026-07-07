@@ -1,0 +1,54 @@
+rules_version = '2';
+
+// ICU Consultant — Firestore security rules.
+// Publish in the Firebase console: Firestore Database → Rules → paste → Publish.
+//
+// Model:
+//   icu/config = { admins: [email…], members: [email…] }
+//   icu/consultants | icu/shifts | icu/holidays = { items: [...] }  (schedule)
+//   requests/{id} = one leave/on-call request
+//
+// Admins: full control. Members: view schedule + submit/track their own requests.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function cfg() { return get(/databases/$(database)/documents/icu/config).data; }
+    function cfgExists() { return exists(/databases/$(database)/documents/icu/config); }
+
+    function isAdmin() {
+      return signedIn() && cfgExists()
+        && cfg().get('admins', []).hasAny([request.auth.token.email]);
+    }
+    function isMember() {
+      return isAdmin() || (signedIn() && cfgExists()
+        && cfg().get('members', []).hasAny([request.auth.token.email]));
+    }
+
+    // Access config — any signed-in user may read (to learn their role).
+    // The first user bootstraps themselves as admin; only admins change it after.
+    match /icu/config {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.admins.hasAny([request.auth.token.email]);
+      allow update, delete: if isAdmin();
+    }
+
+    // Schedule datasets (consultants, shifts, holidays): members read, admins write.
+    match /icu/{docId} {
+      allow read: if isMember();
+      allow write: if isAdmin();
+    }
+
+    // Requests: members read; a user may create and cancel/edit their OWN pending
+    // request; admins manage every request.
+    match /requests/{reqId} {
+      allow read: if isMember();
+      allow create: if isAdmin()
+        || (isMember() && request.resource.data.consultantId == request.auth.uid);
+      allow update, delete: if isAdmin()
+        || (isMember() && resource.data.consultantId == request.auth.uid
+            && resource.data.status == 'Pending');
+    }
+  }
+}

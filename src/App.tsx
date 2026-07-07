@@ -3,9 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Consultant, Shift, ShiftType, LeaveRequest, Holiday, LeaveType, RequestKind, ShiftPreference } from './types';
-import { subscribeDataset, saveDataset, subscribeConfig, saveConfig } from './dataStore';
+import {
+  subscribeDataset, saveDataset, subscribeConfig, saveConfig,
+  subscribeRequests, saveRequest, deleteRequest, migrateLegacyLeaves
+} from './dataStore';
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import Login from './components/Login';
@@ -19,7 +22,7 @@ import Settings from './components/Settings';
 import RosterCalendar from './components/RosterCalendar';
 import VacationCalendar from './components/VacationCalendar';
 
-import { Calendar, ClipboardList, BarChart3, Settings as SettingsIcon, Stethoscope, ChevronLeft, ChevronRight, FileDown, CalendarCheck, Palmtree } from 'lucide-react';
+import { Calendar, ClipboardList, BarChart3, Settings as SettingsIcon, Stethoscope, ChevronLeft, ChevronRight, FileDown, CalendarCheck, Palmtree, ShieldAlert } from 'lucide-react';
 
 type Tab = 'Schedule' | 'Roster' | 'Vacations' | 'Requests' | 'Analytics' | 'Settings';
 type ScheduleSubTab = 'DailyList' | 'MonthlyGrid' | 'ManualBuilder';
@@ -52,8 +55,9 @@ export default function App() {
   const [authUser, setAuthUser] = useState<User | null>(null);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
 
-  // Access control: list of admin emails, and whether it has loaded yet.
+  // Access control: admin & member email lists, and whether they've loaded.
   const [admins, setAdmins] = useState<string[]>([]);
+  const [members, setMembers] = useState<string[]>([]);
   const [roleReady, setRoleReady] = useState<boolean>(false);
 
   // Track the signed-in user.
@@ -65,11 +69,12 @@ export default function App() {
   }, []);
 
   // Load the access config once signed in. The very first user to sign in
-  // (no config document yet) is bootstrapped as the sole administrator.
+  // (no config document yet) is bootstrapped as the sole admin + member.
   useEffect(() => {
     if (!authUser) {
       setRoleReady(false);
       setAdmins([]);
+      setMembers([]);
       return;
     }
     const unsub = subscribeConfig(
@@ -78,12 +83,15 @@ export default function App() {
           const email = authUser.email?.toLowerCase();
           if (email) {
             setAdmins([email]);
-            saveConfig({ admins: [email] });
+            setMembers([email]);
+            saveConfig({ admins: [email], members: [email] });
           } else {
             setAdmins([]);
+            setMembers([]);
           }
         } else {
           setAdmins(cfg.admins);
+          setMembers(cfg.members);
         }
         setRoleReady(true);
       },
@@ -95,8 +103,10 @@ export default function App() {
     return unsub;
   }, [authUser]);
 
-  const isAdmin =
-    !!authUser?.email && admins.some(a => a.toLowerCase() === authUser.email!.toLowerCase());
+  const email = authUser?.email?.toLowerCase() ?? '';
+  const isAdmin = !!email && admins.some(a => a.toLowerCase() === email);
+  // Admins are implicitly members.
+  const isMember = isAdmin || (!!email && members.some(m => m.toLowerCase() === email));
 
   const handleSignOut = () => {
     signOut(auth);
@@ -104,7 +114,12 @@ export default function App() {
 
   const handleUpdateAdmins = (nextAdmins: string[]) => {
     setAdmins(nextAdmins);
-    saveConfig({ admins: nextAdmins });
+    saveConfig({ admins: nextAdmins, members });
+  };
+
+  const handleUpdateMembers = (nextMembers: string[]) => {
+    setMembers(nextMembers);
+    saveConfig({ admins, members: nextMembers });
   };
 
   // Subscribe to Firestore for permanent, shared, real-time data — only once
@@ -112,10 +127,12 @@ export default function App() {
   // cloud document yet), any data still in this browser's localStorage is
   // migrated up to the cloud so nothing is lost.
   useEffect(() => {
-    if (!authUser) return;
+    // Only subscribe once access is confirmed — the rules require membership,
+    // and subscribing earlier would create dead (permission-denied) listeners.
+    if (!authUser || !isMember) return;
 
     const subscribe = <T,>(
-      name: 'consultants' | 'shifts' | 'leaves' | 'holidays',
+      name: 'consultants' | 'shifts' | 'holidays',
       localKey: string,
       setter: (v: T[]) => void
     ) =>
@@ -144,11 +161,21 @@ export default function App() {
     const unsubs = [
       subscribe<Consultant>('consultants', 'icu_consultants', setConsultants),
       subscribe<Shift>('shifts', 'icu_shifts', setShifts),
-      subscribe<LeaveRequest>('leaves', 'icu_leaves', setLeaves),
-      subscribe<Holiday>('holidays', 'icu_holidays', setHolidays)
+      subscribe<Holiday>('holidays', 'icu_holidays', setHolidays),
+      // Leave & on-call requests live in their own collection.
+      subscribeRequests(setLeaves, err => console.error('Firestore "requests" subscription failed:', err))
     ];
     return () => unsubs.forEach(unsub => unsub());
-  }, [authUser]);
+  }, [authUser, isMember]);
+
+  // One-time migration of any legacy requests (old icu/leaves array) into the
+  // requests collection, performed by the first admin to load the new build.
+  const migratedRef = useRef(false);
+  useEffect(() => {
+    if (!isAdmin || migratedRef.current) return;
+    migratedRef.current = true;
+    migrateLegacyLeaves().catch(err => console.error('Legacy leave migration failed:', err));
+  }, [isAdmin]);
 
   // Sync dark mode class
   useEffect(() => {
@@ -256,17 +283,16 @@ export default function App() {
     );
   };
 
-  // 3. Leave Requests actions
+  // 3. Leave / on-call request actions — each writes a single request document;
+  // the requests subscription reflects the change back into `leaves`.
   const handleApproveLeave = (id: string) => {
-    const updated = leaves.map(l => (l.id === id ? { ...l, status: 'Approved' as const } : l));
-    setLeaves(updated);
-    saveDataset('leaves', updated);
+    const req = leaves.find(l => l.id === id);
+    if (req) saveRequest({ ...req, status: 'Approved' });
   };
 
   const handleRejectLeave = (id: string) => {
-    const updated = leaves.map(l => (l.id === id ? { ...l, status: 'Rejected' as const } : l));
-    setLeaves(updated);
-    saveDataset('leaves', updated);
+    const req = leaves.find(l => l.id === id);
+    if (req) saveRequest({ ...req, status: 'Rejected' });
   };
 
   const handleSubmitLeave = (
@@ -293,21 +319,15 @@ export default function App() {
     // Only include `shift` when set — Firestore rejects undefined values.
     if (shift) newRequest.shift = shift;
 
-    const updated = [newRequest, ...leaves];
-    setLeaves(updated);
-    saveDataset('leaves', updated);
+    saveRequest(newRequest);
   };
 
   const handleUpdateLeave = (request: LeaveRequest) => {
-    const updated = leaves.map(l => (l.id === request.id ? request : l));
-    setLeaves(updated);
-    saveDataset('leaves', updated);
+    saveRequest(request);
   };
 
   const handleDeleteLeave = (id: string) => {
-    const updated = leaves.filter(l => l.id !== id);
-    setLeaves(updated);
-    saveDataset('leaves', updated);
+    deleteRequest(id);
   };
 
   // 4. Consultants CRUD
@@ -536,8 +556,9 @@ export default function App() {
 
         if (nextConsultants) { setConsultants(nextConsultants); saveDataset('consultants', nextConsultants); }
         if (nextShifts) { setShifts(nextShifts); saveDataset('shifts', nextShifts); }
-        if (nextLeaves) { setLeaves(nextLeaves); saveDataset('leaves', nextLeaves); }
         if (nextHolidays) { setHolidays(nextHolidays); saveDataset('holidays', nextHolidays); }
+        // Requests live in their own collection — write each one.
+        if (nextLeaves) { (nextLeaves as LeaveRequest[]).forEach(r => saveRequest(r)); }
 
         alert('Backup imported successfully.');
       } catch (err) {
@@ -558,6 +579,30 @@ export default function App() {
   }
   if (!authUser) {
     return <Login />;
+  }
+
+  // Signed in but not on the access list.
+  if (!isMember) {
+    return (
+      <div className="min-h-screen bg-background dark:bg-[#121214] flex items-center justify-center p-4">
+        <div className="w-full max-w-sm bg-surface-container-lowest rounded-2xl shadow-xl border border-outline-variant/20 p-6 space-y-4 text-center animate-fade-in">
+          <div className="w-14 h-14 rounded-2xl bg-error-container/40 flex items-center justify-center mx-auto">
+            <ShieldAlert className="w-7 h-7 text-error" />
+          </div>
+          <h1 className="text-headline-md font-headline-md font-bold text-on-surface">Access pending</h1>
+          <p className="text-body-md text-on-surface-variant">
+            You're signed in as <span className="font-semibold text-on-surface break-all">{authUser.email}</span>,
+            but this account hasn't been granted access yet. Please ask an administrator to add you.
+          </p>
+          <button
+            onClick={handleSignOut}
+            className="w-full h-11 bg-surface-container-high text-on-surface font-bold rounded-xl active:scale-95 transition-all cursor-pointer border border-outline-variant/20"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -807,6 +852,8 @@ export default function App() {
               isAdmin={isAdmin}
               admins={admins}
               onUpdateAdmins={handleUpdateAdmins}
+              members={members}
+              onUpdateMembers={handleUpdateMembers}
             />
           )}
         </section>

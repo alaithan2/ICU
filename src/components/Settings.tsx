@@ -24,6 +24,8 @@ interface SettingsProps {
   isAdmin: boolean;
   admins: string[];
   onUpdateAdmins: (admins: string[]) => void;
+  members: string[];
+  onUpdateMembers: (members: string[]) => void;
 }
 
 export default function Settings({
@@ -41,13 +43,31 @@ export default function Settings({
   onSignOut,
   isAdmin,
   admins,
-  onUpdateAdmins
+  onUpdateAdmins,
+  members,
+  onUpdateMembers
 }: SettingsProps) {
   // Hidden file input used to pick a backup file to import.
   const importInputRef = useRef<HTMLInputElement>(null);
 
-  // New-admin email input.
+  // New-admin & new-member email inputs.
   const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [newMemberEmail, setNewMemberEmail] = useState('');
+
+  const handleAddMember = (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = newMemberEmail.trim().toLowerCase();
+    if (!email || members.map(m => m.toLowerCase()).includes(email)) {
+      setNewMemberEmail('');
+      return;
+    }
+    onUpdateMembers([...members, email]);
+    setNewMemberEmail('');
+  };
+
+  const handleRemoveMember = (email: string) => {
+    onUpdateMembers(members.filter(m => m !== email));
+  };
 
   const handleAddAdmin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -302,6 +322,55 @@ export default function Settings({
               value={newAdminEmail}
               onChange={(e) => setNewAdminEmail(e.target.value)}
               placeholder="new.admin@gmail.com"
+              className="flex-1 min-w-0 bg-surface-container border-none rounded-lg px-3 py-2.5 text-body-md text-on-surface focus:ring-2 focus:ring-primary outline-none"
+            />
+            <button
+              type="submit"
+              className="shrink-0 flex items-center gap-1 bg-primary text-on-primary font-bold text-sm px-3 rounded-lg active:scale-95 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Add
+            </button>
+          </form>
+        </div>
+      </section>
+
+      {/* Members (Access) Section */}
+      <section className="space-y-3">
+        <h3 className="px-4 text-label-sm font-label-sm text-on-surface-variant uppercase tracking-widest">
+          Members (Access)
+        </h3>
+        <div className="bg-surface-container-low rounded-xl p-4 shadow-sm border border-outline-variant/10 space-y-3">
+          <p className="text-label-sm text-on-surface-variant leading-relaxed">
+            Only these Google accounts (plus administrators) can sign in and view the schedule. Add each
+            consultant's Gmail to grant access.
+          </p>
+          {members.length === 0 ? (
+            <p className="text-label-sm text-on-surface-variant italic">No members added yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {members.map(email => (
+                <div
+                  key={email}
+                  className="flex items-center justify-between gap-2 bg-surface-container-lowest rounded-lg p-2.5 border border-outline-variant/10"
+                >
+                  <span className="text-body-md text-on-surface truncate">{email}</span>
+                  <button
+                    onClick={() => handleRemoveMember(email)}
+                    className="text-error/70 hover:text-error p-1 rounded-lg hover:bg-error-container/20 active:scale-95 transition-transform cursor-pointer shrink-0"
+                    title="Remove member"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <form onSubmit={handleAddMember} className="flex gap-2">
+            <input
+              type="email"
+              value={newMemberEmail}
+              onChange={(e) => setNewMemberEmail(e.target.value)}
+              placeholder="consultant@gmail.com"
               className="flex-1 min-w-0 bg-surface-container border-none rounded-lg px-3 py-2.5 text-body-md text-on-surface focus:ring-2 focus:ring-primary outline-none"
             />
             <button
