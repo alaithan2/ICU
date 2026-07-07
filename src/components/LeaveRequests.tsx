@@ -10,6 +10,7 @@ import {
   Trash2, Pencil, CalendarClock
 } from 'lucide-react';
 import { getConsultantColor, getInitials } from '../utils/consultantColors';
+import { todayStr } from '../utils/dates';
 
 interface LeaveRequestsProps {
   currentYear: number;
@@ -71,7 +72,7 @@ export default function LeaveRequests({
 
   const [submitSuccess, setSubmitSuccess] = useState<boolean>(false);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayStr();
 
   const calculateDays = () => {
     if (!startDate || !endDate) return 0;

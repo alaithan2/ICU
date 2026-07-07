@@ -75,7 +75,7 @@ export default function App() {
     const unsub = subscribeConfig(
       (cfg, exists) => {
         if (!exists) {
-          const email = authUser.email;
+          const email = authUser.email?.toLowerCase();
           if (email) {
             setAdmins([email]);
             saveConfig({ admins: [email] });
@@ -95,7 +95,8 @@ export default function App() {
     return unsub;
   }, [authUser]);
 
-  const isAdmin = !!authUser?.email && admins.includes(authUser.email);
+  const isAdmin =
+    !!authUser?.email && admins.some(a => a.toLowerCase() === authUser.email!.toLowerCase());
 
   const handleSignOut = () => {
     signOut(auth);
@@ -174,7 +175,8 @@ export default function App() {
     const index = updated.findIndex(s => s.date === date && s.type === type);
 
     if (index !== -1) {
-      updated[index].consultantId = consultantId;
+      // Replace with a new object rather than mutating the one held in state.
+      updated[index] = { ...updated[index], consultantId };
     } else {
       updated.push({
         id: `shift-${date}-${type}`,

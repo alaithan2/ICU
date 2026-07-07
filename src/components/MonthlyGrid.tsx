@@ -6,6 +6,7 @@
 import React from 'react';
 import { Consultant, Shift, ShiftType } from '../types';
 import { getConsultantColor, getInitials } from '../utils/consultantColors';
+import { todayStr } from '../utils/dates';
 
 interface MonthlyGridProps {
   currentYear: number;
@@ -96,7 +97,7 @@ export default function MonthlyGrid({
           }
 
           const dayStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-          const isToday = new Date().toISOString().split('T')[0] === dayStr;
+          const isToday = todayStr() === dayStr;
           // Column index within the 7-day row: 5 = Friday, 6 = Saturday (weekend).
           const isWeekend = idx % 7 === 5 || idx % 7 === 6;
           const dayShifts = getShiftsForDay(day);

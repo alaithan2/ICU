@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Consultant, Shift, ShiftType, Holiday, LeaveRequest } from '../types';
 import { Sparkles, ChevronDown, ChevronUp, Repeat } from 'lucide-react';
 import { getConsultantColor, getInitials } from '../utils/consultantColors';
+import { todayStr, isWeekendStr } from '../utils/dates';
 
 interface DailyListProps {
   currentYear: number;
@@ -183,9 +184,9 @@ export default function DailyList({
       {/* List of Days */}
       <div className="space-y-4">
         {dateStrings.map(dateStr => {
-          const isToday = new Date().toISOString().split('T')[0] === dateStr;
+          const isToday = todayStr() === dateStr;
           // Weekend = Friday (5) & Saturday (6); the work week runs Sun–Thu.
-          const isWeekend = [5, 6].includes(new Date(dateStr).getDay());
+          const isWeekend = isWeekendStr(dateStr);
           const status = getDayStatus(dateStr);
           const isExpanded = expandedDays[dateStr] !== false; // Default to expanded
 

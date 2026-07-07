@@ -7,6 +7,7 @@ import React from 'react';
 import { Consultant, Shift, LeaveRequest } from '../types';
 import { Calendar, Award, Share2, ShieldAlert } from 'lucide-react';
 import { getConsultantColor, getInitials } from '../utils/consultantColors';
+import { isWeekendStr, toDateStr } from '../utils/dates';
 
 interface AnalyticsProps {
   currentYear: number;
@@ -29,12 +30,6 @@ export default function Analytics({
     return y === currentYear && (m - 1) === currentMonth;
   };
 
-  // Weekend = Friday (5) & Saturday (6).
-  const isWeekendDate = (dateStr: string) => {
-    const dow = new Date(dateStr).getDay();
-    return dow === 5 || dow === 6;
-  };
-
   // Helper to count approved vacation days for a consultant in the selected period
   // (on-call preference requests are excluded — they aren't vacations).
   const countVacationDays = (consultantId: string) => {
@@ -44,12 +39,13 @@ export default function Analytics({
     );
 
     cLeaves.forEach(l => {
-      const start = new Date(l.startDate);
-      const end = new Date(l.endDate);
-      let curr = new Date(start);
+      // Iterate day-by-day in local time (no UTC drift).
+      const [sy, sm, sd] = l.startDate.split('-').map(Number);
+      const [ey, em, ed] = l.endDate.split('-').map(Number);
+      const end = new Date(ey, em - 1, ed);
+      const curr = new Date(sy, sm - 1, sd);
       while (curr <= end) {
-        const currStr = curr.toISOString().split('T')[0];
-        if (isSelectedPeriod(currStr)) days++;
+        if (isSelectedPeriod(toDateStr(curr))) days++;
         curr.setDate(curr.getDate() + 1);
       }
     });
@@ -63,11 +59,11 @@ export default function Analytics({
     const allShifts = shifts.filter(s => s.consultantId === c.id);
 
     const onCallDays = new Set(monthShifts.map(s => s.date)).size;
-    const weekendOnCallDays = new Set(monthShifts.filter(s => isWeekendDate(s.date)).map(s => s.date)).size;
+    const weekendOnCallDays = new Set(monthShifts.filter(s => isWeekendStr(s.date)).map(s => s.date)).size;
 
     // Cumulative across every month in the data.
     const cumulativeOnCallDays = new Set(allShifts.map(s => s.date)).size;
-    const cumulativeWeekendDays = new Set(allShifts.filter(s => isWeekendDate(s.date)).map(s => s.date)).size;
+    const cumulativeWeekendDays = new Set(allShifts.filter(s => isWeekendStr(s.date)).map(s => s.date)).size;
 
     const vacationDays = countVacationDays(c.id);
 

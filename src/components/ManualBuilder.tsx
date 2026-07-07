@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { Consultant, Shift, ShiftType } from '../types';
 import { Calendar, User, Info, Check } from 'lucide-react';
+import { todayStr } from '../utils/dates';
 
 interface ManualBuilderProps {
   consultants: Consultant[];
@@ -21,7 +22,7 @@ export default function ManualBuilder({
   onUpdateShift
 }: ManualBuilderProps) {
   const [selectedDate, setSelectedDate] = useState<string>(
-    initialSelectedDate || new Date().toISOString().split('T')[0]
+    initialSelectedDate || todayStr()
   );
   const [selectedType, setSelectedType] = useState<ShiftType>('Morning');
   const [selectedConsultantId, setSelectedConsultantId] = useState<string>('');
