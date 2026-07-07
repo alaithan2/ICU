@@ -4,8 +4,11 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Consultant, Shift, ShiftType, LeaveRequest, Holiday } from './types';
-import { subscribeDataset, saveDataset } from './dataStore';
+import { Consultant, Shift, ShiftType, LeaveRequest, Holiday, LeaveType, RequestKind, ShiftPreference } from './types';
+import { subscribeDataset, saveDataset, subscribeConfig, saveConfig } from './dataStore';
+import { auth } from './firebase';
+import { onAuthStateChanged, signOut, User } from 'firebase/auth';
+import Login from './components/Login';
 
 import DailyList from './components/DailyList';
 import MonthlyGrid from './components/MonthlyGrid';
@@ -13,10 +16,12 @@ import ManualBuilder from './components/ManualBuilder';
 import LeaveRequests from './components/LeaveRequests';
 import Analytics from './components/Analytics';
 import Settings from './components/Settings';
+import RosterCalendar from './components/RosterCalendar';
+import VacationCalendar from './components/VacationCalendar';
 
-import { Calendar, ClipboardList, BarChart3, Settings as SettingsIcon, Stethoscope, ChevronLeft, ChevronRight, FileDown } from 'lucide-react';
+import { Calendar, ClipboardList, BarChart3, Settings as SettingsIcon, Stethoscope, ChevronLeft, ChevronRight, FileDown, CalendarCheck, Palmtree } from 'lucide-react';
 
-type Tab = 'Schedule' | 'Requests' | 'Analytics' | 'Settings';
+type Tab = 'Schedule' | 'Roster' | 'Vacations' | 'Requests' | 'Analytics' | 'Settings';
 type ScheduleSubTab = 'DailyList' | 'MonthlyGrid' | 'ManualBuilder';
 
 export default function App() {
@@ -43,10 +48,71 @@ export default function App() {
     return false;
   });
 
-  // Subscribe to Firestore for permanent, shared, real-time data.
-  // On first run (no cloud document yet), any data still in this browser's
-  // localStorage is migrated up to the cloud so nothing is lost.
+  // Authentication state
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+
+  // Access control: list of admin emails, and whether it has loaded yet.
+  const [admins, setAdmins] = useState<string[]>([]);
+  const [roleReady, setRoleReady] = useState<boolean>(false);
+
+  // Track the signed-in user.
   useEffect(() => {
+    return onAuthStateChanged(auth, user => {
+      setAuthUser(user);
+      setAuthLoading(false);
+    });
+  }, []);
+
+  // Load the access config once signed in. The very first user to sign in
+  // (no config document yet) is bootstrapped as the sole administrator.
+  useEffect(() => {
+    if (!authUser) {
+      setRoleReady(false);
+      setAdmins([]);
+      return;
+    }
+    const unsub = subscribeConfig(
+      (cfg, exists) => {
+        if (!exists) {
+          const email = authUser.email;
+          if (email) {
+            setAdmins([email]);
+            saveConfig({ admins: [email] });
+          } else {
+            setAdmins([]);
+          }
+        } else {
+          setAdmins(cfg.admins);
+        }
+        setRoleReady(true);
+      },
+      err => {
+        console.error('Firestore "config" subscription failed:', err);
+        setRoleReady(true);
+      }
+    );
+    return unsub;
+  }, [authUser]);
+
+  const isAdmin = !!authUser?.email && admins.includes(authUser.email);
+
+  const handleSignOut = () => {
+    signOut(auth);
+  };
+
+  const handleUpdateAdmins = (nextAdmins: string[]) => {
+    setAdmins(nextAdmins);
+    saveConfig({ admins: nextAdmins });
+  };
+
+  // Subscribe to Firestore for permanent, shared, real-time data — only once
+  // signed in (the security rules require authentication). On first run (no
+  // cloud document yet), any data still in this browser's localStorage is
+  // migrated up to the cloud so nothing is lost.
+  useEffect(() => {
+    if (!authUser) return;
+
     const subscribe = <T,>(
       name: 'consultants' | 'shifts' | 'leaves' | 'holidays',
       localKey: string,
@@ -81,7 +147,7 @@ export default function App() {
       subscribe<Holiday>('holidays', 'icu_holidays', setHolidays)
     ];
     return () => unsubs.forEach(unsub => unsub());
-  }, []);
+  }, [authUser]);
 
   // Sync dark mode class
   useEffect(() => {
@@ -203,26 +269,41 @@ export default function App() {
 
   const handleSubmitLeave = (
     consultantId: string,
-    type: 'Annual Leave' | 'Sick Leave' | 'Study Leave' | 'Other',
+    consultantName: string,
+    type: LeaveType,
     startDate: string,
     endDate: string,
-    reason: string
+    reason: string,
+    kind: RequestKind = 'Leave',
+    shift?: ShiftPreference
   ) => {
-    const consultant = consultants.find(c => c.id === consultantId);
-    if (!consultant) return;
-
     const newRequest: LeaveRequest = {
       id: `leave-${Date.now()}`,
       consultantId,
-      consultantName: consultant.name,
+      consultantName,
       type,
       startDate,
       endDate,
       status: 'Pending',
-      reason
+      reason,
+      kind
     };
+    // Only include `shift` when set — Firestore rejects undefined values.
+    if (shift) newRequest.shift = shift;
 
     const updated = [newRequest, ...leaves];
+    setLeaves(updated);
+    saveDataset('leaves', updated);
+  };
+
+  const handleUpdateLeave = (request: LeaveRequest) => {
+    const updated = leaves.map(l => (l.id === request.id ? request : l));
+    setLeaves(updated);
+    saveDataset('leaves', updated);
+  };
+
+  const handleDeleteLeave = (id: string) => {
+    const updated = leaves.filter(l => l.id !== id);
     setLeaves(updated);
     saveDataset('leaves', updated);
   };
@@ -315,6 +396,34 @@ export default function App() {
       </tr>`;
     }
 
+    // Leave / vacation requests overlapping this month (on-call preferences excluded).
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const monthStart = `${currentYear}-${pad(currentMonth + 1)}-01`;
+    const monthEnd = `${currentYear}-${pad(currentMonth + 1)}-${pad(daysInMonth)}`;
+    const fmt = (dateStr: string) =>
+      new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+
+    const monthLeaves = leaves
+      .filter(l => l.kind !== 'OnCall' && l.startDate <= monthEnd && l.endDate >= monthStart)
+      .sort((a, b) => a.startDate.localeCompare(b.startDate));
+
+    let leaveRows = '';
+    if (monthLeaves.length === 0) {
+      leaveRows = `<tr><td colspan="5" class="empty">No leave or vacation requests for this month.</td></tr>`;
+    } else {
+      monthLeaves.forEach(l => {
+        const statusClass =
+          l.status === 'Approved' ? 'st-approved' : l.status === 'Rejected' ? 'st-rejected' : 'st-pending';
+        leaveRows += `<tr>
+        <td>${escapeHtml(l.consultantName)}</td>
+        <td>${escapeHtml(l.type)}</td>
+        <td>${fmt(l.startDate)}</td>
+        <td>${fmt(l.endDate)}</td>
+        <td class="${statusClass}">${escapeHtml(l.status)}</td>
+      </tr>`;
+      });
+    }
+
     const html = `<!doctype html>
 <html>
 <head>
@@ -322,17 +431,26 @@ export default function App() {
   <title>ICU Rota — ${monthName} ${currentYear}</title>
   <style>
     * { box-sizing: border-box; }
-    body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: #1a1c1e; margin: 24px; }
-    h1 { font-size: 20px; margin: 0 0 2px; }
-    h2 { font-size: 14px; font-weight: 600; color: #0b6bcb; margin: 0 0 16px; }
-    table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    th, td { border: 1px solid #c3c7cf; padding: 6px 8px; text-align: left; }
-    thead th { background: #0b6bcb; color: #fff; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
-    td.num { text-align: center; font-weight: 700; width: 34px; }
-    tr.weekend td { background: #f2ecff; }
-    tr:nth-child(even):not(.weekend) td { background: #f6f8fc; }
-    .footer { margin-top: 14px; font-size: 10px; color: #73777f; }
-    @media print { body { margin: 12mm; } @page { size: A4 portrait; margin: 12mm; } }
+    /* Force background colours (weekend highlight) to print. */
+    html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; color: #1a1c1e; margin: 0; padding: 8px 12px; font-size: 10px; }
+    h1 { font-size: 15px; margin: 0 0 1px; }
+    h2 { font-size: 11px; font-weight: 600; color: #0058bc; margin: 0 0 6px; }
+    h2.section { font-size: 11px; margin: 10px 0 5px; }
+    table { width: 100%; border-collapse: collapse; font-size: 9px; }
+    th, td { border: 1px solid #c3c7cf; padding: 1.5px 5px; text-align: left; }
+    thead th { background: #0058bc; color: #fff; font-size: 8.5px; text-transform: uppercase; letter-spacing: .03em; }
+    td.num { text-align: center; font-weight: 700; width: 24px; }
+    tr:nth-child(even):not(.weekend) td { background: #f4f6fb; }
+    /* Weekend (Fri/Sat) rows — strong highlight. */
+    tr.weekend td { background: #ffd9b3; color: #7c2e00; font-weight: 700; }
+    .st-approved { color: #1d7a3e; font-weight: 700; }
+    .st-rejected { color: #ba1a1a; font-weight: 700; }
+    .st-pending { color: #9e3d00; font-weight: 700; }
+    .empty { text-align: center; color: #73777f; font-style: italic; }
+    .footer { margin-top: 6px; font-size: 8px; color: #73777f; }
+    @page { size: A4 portrait; margin: 9mm; }
+    @media print { tr { page-break-inside: avoid; } }
   </style>
 </head>
 <body>
@@ -349,7 +467,16 @@ export default function App() {
     </thead>
     <tbody>${rows}</tbody>
   </table>
-  <p class="footer">Weekend (Fri/Sat) shaded. Generated ${escapeHtml(new Date().toLocaleString())} · ICU Consultant Management System.</p>
+
+  <h2 class="section">Leave &amp; Vacation Requests — ${monthName} ${currentYear}</h2>
+  <table>
+    <thead>
+      <tr><th>Consultant</th><th>Type</th><th>From</th><th>To</th><th>Status</th></tr>
+    </thead>
+    <tbody>${leaveRows}</tbody>
+  </table>
+
+  <p class="footer">Weekends (Fri/Sat) highlighted in orange. Generated ${escapeHtml(new Date().toLocaleString())} · ICU Consultant Management System.</p>
 </body>
 </html>`;
 
@@ -419,6 +546,18 @@ export default function App() {
     reader.readAsText(file);
   };
 
+  // Gate the app behind authentication.
+  if (authLoading || (authUser && !roleReady)) {
+    return (
+      <div className="min-h-screen bg-background dark:bg-[#121214] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
+  if (!authUser) {
+    return <Login />;
+  }
+
   return (
     <div className="min-h-screen bg-background dark:bg-[#121214] text-on-surface dark:text-inverse-on-surface pb-32 transition-colors duration-300">
       {/* Top Header App Bar */}
@@ -478,7 +617,7 @@ export default function App() {
 
               {/* Rota Sub-navigation Tabs */}
               <div className="flex bg-surface-container dark:bg-[#1C1C1E] rounded-xl p-1 mt-4">
-                {(['DailyList', 'MonthlyGrid', 'ManualBuilder'] as ScheduleSubTab[]).map(sub => {
+                {((isAdmin ? ['DailyList', 'MonthlyGrid', 'ManualBuilder'] : ['DailyList', 'MonthlyGrid']) as ScheduleSubTab[]).map(sub => {
                   const labels: Record<ScheduleSubTab, string> = {
                     DailyList: 'Daily List',
                     MonthlyGrid: 'Monthly Grid',
@@ -499,6 +638,34 @@ export default function App() {
                   );
                 })}
               </div>
+            </>
+          )}
+
+          {activeTab === 'Roster' && (
+            <>
+              <p className="text-primary font-bold text-label-caps uppercase tracking-wider">
+                PUBLISHED ROTA
+              </p>
+              <h2 className="text-headline-lg-mobile font-bold text-on-surface dark:text-inverse-on-surface">
+                Roster Calendar
+              </h2>
+              <p className="text-body-md text-on-surface-variant dark:text-outline">
+                Read-only view of the schedule for the current and previous months.
+              </p>
+            </>
+          )}
+
+          {activeTab === 'Vacations' && (
+            <>
+              <p className="text-primary font-bold text-label-caps uppercase tracking-wider">
+                APPROVED LEAVE
+              </p>
+              <h2 className="text-headline-lg-mobile font-bold text-on-surface dark:text-inverse-on-surface">
+                Vacation Calendar
+              </h2>
+              <p className="text-body-md text-on-surface-variant dark:text-outline">
+                Approved vacations shown as a bar from start to end of each period.
+              </p>
             </>
           )}
 
@@ -553,6 +720,7 @@ export default function App() {
               leaves={leaves}
               onUpdateShift={handleUpdateShift}
               onAutoFill={handleAutoFill}
+              isAdmin={isAdmin}
             />
           )}
 
@@ -562,16 +730,34 @@ export default function App() {
               currentMonth={currentMonth}
               consultants={consultants}
               shifts={shifts}
-              onSelectDate={handleSelectMonthlyGridDate}
+              onSelectDate={isAdmin ? handleSelectMonthlyGridDate : () => {}}
             />
           )}
 
-          {activeTab === 'Schedule' && scheduleSubTab === 'ManualBuilder' && (
+          {activeTab === 'Schedule' && scheduleSubTab === 'ManualBuilder' && isAdmin && (
             <ManualBuilder
               consultants={consultants}
               shifts={shifts}
               initialSelectedDate={selectedBuilderDate}
               onUpdateShift={handleUpdateShift}
+            />
+          )}
+
+          {activeTab === 'Roster' && (
+            <RosterCalendar
+              currentYear={currentYear}
+              currentMonth={currentMonth}
+              consultants={consultants}
+              shifts={shifts}
+            />
+          )}
+
+          {activeTab === 'Vacations' && (
+            <VacationCalendar
+              currentYear={currentYear}
+              currentMonth={currentMonth}
+              consultants={consultants}
+              leaves={leaves}
             />
           )}
 
@@ -584,6 +770,11 @@ export default function App() {
               onApproveLeave={handleApproveLeave}
               onRejectLeave={handleRejectLeave}
               onSubmitLeave={handleSubmitLeave}
+              onUpdateLeave={handleUpdateLeave}
+              onDeleteLeave={handleDeleteLeave}
+              isAdmin={isAdmin}
+              currentUserId={authUser.uid}
+              currentUserName={authUser.displayName || authUser.email || 'User'}
             />
           )}
 
@@ -609,6 +800,11 @@ export default function App() {
               onDeleteHoliday={handleDeleteHoliday}
               onExportData={handleExportData}
               onImportData={handleImportData}
+              userEmail={authUser.email}
+              onSignOut={handleSignOut}
+              isAdmin={isAdmin}
+              admins={admins}
+              onUpdateAdmins={handleUpdateAdmins}
             />
           )}
         </section>
@@ -618,6 +814,8 @@ export default function App() {
       <nav className="fixed bottom-0 left-0 w-full z-50 bg-surface/90 dark:bg-[#1C1C1E]/95 backdrop-blur-xl border-t border-outline-variant/30 shadow-lg flex justify-around items-center h-16 pb-safe">
         {[
           { tab: 'Schedule', icon: Calendar, label: 'Schedule' },
+          { tab: 'Roster', icon: CalendarCheck, label: 'Roster' },
+          { tab: 'Vacations', icon: Palmtree, label: 'Vacations' },
           { tab: 'Requests', icon: ClipboardList, label: 'Requests' },
           { tab: 'Analytics', icon: BarChart3, label: 'Analytics' },
           { tab: 'Settings', icon: SettingsIcon, label: 'Settings' }
@@ -628,14 +826,14 @@ export default function App() {
             <button
               key={item.tab}
               onClick={() => setActiveTab(item.tab as Tab)}
-              className={`flex flex-col items-center justify-center flex-1 py-1 transition-all active:scale-90 duration-150 cursor-pointer ${
+              className={`flex flex-col items-center justify-center flex-1 min-w-0 px-0.5 py-1 transition-all active:scale-90 duration-150 cursor-pointer ${
                 isActive
                   ? 'text-primary dark:text-primary-fixed font-bold'
                   : 'text-on-surface-variant dark:text-outline hover:text-on-surface dark:hover:text-inverse-on-surface'
               }`}
             >
-              <Icon className={`w-5.5 h-5.5 ${isActive ? 'stroke-[2.5px]' : 'stroke-[1.8px]'}`} />
-              <span className="text-[11px] mt-1 font-semibold">{item.label}</span>
+              <Icon className={`w-5 h-5 ${isActive ? 'stroke-[2.5px]' : 'stroke-[1.8px]'}`} />
+              <span className="text-[10px] mt-0.5 font-semibold truncate max-w-full">{item.label}</span>
             </button>
           );
         })}

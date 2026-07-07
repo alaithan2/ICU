@@ -5,7 +5,8 @@
 
 import React, { useState, useRef } from 'react';
 import { Consultant, Holiday } from '../types';
-import { Sun, Moon, Plus, Trash2, ShieldAlert, Check, Heart, UserPlus, Sparkles, X, Download, Upload } from 'lucide-react';
+import { Sun, Moon, Plus, Trash2, ShieldAlert, Check, Heart, UserPlus, Sparkles, X, Download, Upload, LogOut, UserCircle } from 'lucide-react';
+import { getConsultantColor, getInitials } from '../utils/consultantColors';
 
 interface SettingsProps {
   consultants: Consultant[];
@@ -18,6 +19,11 @@ interface SettingsProps {
   onDeleteHoliday: (id: string) => void;
   onExportData: () => void;
   onImportData: (file: File) => void;
+  userEmail: string | null;
+  onSignOut: () => void;
+  isAdmin: boolean;
+  admins: string[];
+  onUpdateAdmins: (admins: string[]) => void;
 }
 
 export default function Settings({
@@ -30,10 +36,40 @@ export default function Settings({
   onAddHoliday,
   onDeleteHoliday,
   onExportData,
-  onImportData
+  onImportData,
+  userEmail,
+  onSignOut,
+  isAdmin,
+  admins,
+  onUpdateAdmins
 }: SettingsProps) {
   // Hidden file input used to pick a backup file to import.
   const importInputRef = useRef<HTMLInputElement>(null);
+
+  // New-admin email input.
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+
+  const handleAddAdmin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const email = newAdminEmail.trim().toLowerCase();
+    if (!email || admins.map(a => a.toLowerCase()).includes(email)) {
+      setNewAdminEmail('');
+      return;
+    }
+    onUpdateAdmins([...admins, email]);
+    setNewAdminEmail('');
+  };
+
+  const handleRemoveAdmin = (email: string) => {
+    if (admins.length <= 1) {
+      alert('You cannot remove the last administrator.');
+      return;
+    }
+    if (email.toLowerCase() === (userEmail ?? '').toLowerCase()) {
+      if (!window.confirm('Remove yourself as an administrator? You will lose admin access.')) return;
+    }
+    onUpdateAdmins(admins.filter(a => a !== email));
+  };
 
   const handleImportFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -102,6 +138,8 @@ export default function Settings({
         </div>
       </section>
 
+      {isAdmin && (
+      <>
       {/* Manage Consultants Section */}
       <section className="space-y-3">
         <div className="flex items-center justify-between px-4">
@@ -123,8 +161,8 @@ export default function Settings({
             >
               <div className="flex items-center gap-3">
                 <div className="relative shrink-0">
-                  <div className="w-10 h-10 rounded-full bg-surface-container-highest border border-outline-variant/30 overflow-hidden">
-                    <img src={c.avatar} alt={c.name} className="w-full h-full object-cover" />
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${getConsultantColor(consultants, c.id).solid}`}>
+                    {getInitials(c.name)}
                   </div>
                   <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#34c759] border-2 border-surface-container-low rounded-full" />
                 </div>
@@ -219,6 +257,77 @@ export default function Settings({
             className="hidden"
             onChange={handleImportFile}
           />
+        </div>
+      </section>
+
+      {/* Administrators (Access) Section */}
+      <section className="space-y-3">
+        <h3 className="px-4 text-label-sm font-label-sm text-on-surface-variant uppercase tracking-widest">
+          Administrators
+        </h3>
+        <div className="bg-surface-container-low rounded-xl p-4 shadow-sm border border-outline-variant/10 space-y-3">
+          <p className="text-label-sm text-on-surface-variant leading-relaxed">
+            These Google accounts have full admin control. Everyone else can view the schedule and submit
+            leave requests.
+          </p>
+          <div className="space-y-2">
+            {admins.map(email => (
+              <div
+                key={email}
+                className="flex items-center justify-between gap-2 bg-surface-container-lowest rounded-lg p-2.5 border border-outline-variant/10"
+              >
+                <span className="text-body-md text-on-surface truncate">{email}</span>
+                <button
+                  onClick={() => handleRemoveAdmin(email)}
+                  className="text-error/70 hover:text-error p-1 rounded-lg hover:bg-error-container/20 active:scale-95 transition-transform cursor-pointer shrink-0"
+                  title="Remove administrator"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <form onSubmit={handleAddAdmin} className="flex gap-2">
+            <input
+              type="email"
+              value={newAdminEmail}
+              onChange={(e) => setNewAdminEmail(e.target.value)}
+              placeholder="new.admin@gmail.com"
+              className="flex-1 min-w-0 bg-surface-container border-none rounded-lg px-3 py-2.5 text-body-md text-on-surface focus:ring-2 focus:ring-primary outline-none"
+            />
+            <button
+              type="submit"
+              className="shrink-0 flex items-center gap-1 bg-primary text-on-primary font-bold text-sm px-3 rounded-lg active:scale-95 transition-all cursor-pointer"
+            >
+              <Plus className="w-4 h-4" /> Add
+            </button>
+          </form>
+        </div>
+      </section>
+      </>
+      )}
+
+      {/* Account Section */}
+      <section className="space-y-3">
+        <h3 className="px-4 text-label-sm font-label-sm text-on-surface-variant uppercase tracking-widest">
+          Account
+        </h3>
+        <div className="bg-surface-container-low rounded-xl p-4 shadow-sm border border-outline-variant/10 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+              <UserCircle className="w-5 h-5 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-body-md font-semibold text-on-surface truncate">{userEmail ?? 'Signed in'}</p>
+              <p className="text-label-sm text-on-surface-variant">Signed in</p>
+            </div>
+          </div>
+          <button
+            onClick={onSignOut}
+            className="shrink-0 flex items-center gap-2 text-error font-bold text-sm px-3 py-2 rounded-lg hover:bg-error-container/30 active:scale-95 transition-all cursor-pointer"
+          >
+            <LogOut className="w-4 h-4" /> Sign Out
+          </button>
         </div>
       </section>
 

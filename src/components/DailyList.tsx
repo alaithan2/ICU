@@ -16,6 +16,7 @@ interface DailyListProps {
   leaves: LeaveRequest[];
   onUpdateShift: (date: string, type: ShiftType, consultantId: string | null) => void;
   onAutoFill: (pattern: string[]) => void;
+  isAdmin: boolean;
 }
 
 export default function DailyList({
@@ -25,7 +26,8 @@ export default function DailyList({
   shifts,
   leaves,
   onUpdateShift,
-  onAutoFill
+  onAutoFill,
+  isAdmin
 }: DailyListProps) {
   const [expandedDays, setExpandedDays] = useState<Record<string, boolean>>({});
 
@@ -118,7 +120,8 @@ export default function DailyList({
 
   return (
     <div id="daily-list-view" className="space-y-6">
-      {/* Weekly Rotation Pattern editor */}
+      {/* Weekly Rotation Pattern editor (admin only) */}
+      {isAdmin && (
       <div className="bg-surface-container-lowest rounded-xl shadow-sm border border-outline-variant/20 p-4 space-y-3">
         <div className="flex items-center gap-2">
           <Repeat className="w-5 h-5 text-primary shrink-0" />
@@ -175,6 +178,7 @@ export default function DailyList({
           </>
         )}
       </div>
+      )}
 
       {/* List of Days */}
       <div className="space-y-4">
@@ -260,20 +264,22 @@ export default function DailyList({
                         )}
                       </div>
                     </div>
-                    <div>
-                      <select
-                        value={morningShift?.consultantId || ''}
-                        onChange={(e) => onUpdateShift(dateStr, 'Morning', e.target.value || null)}
-                        className="bg-surface-container border-none text-xs rounded-lg px-3 py-1 font-medium text-on-surface focus:ring-1 focus:ring-primary outline-none"
-                      >
-                        <option value="">Assign consultant...</option>
-                        {consultants.map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {isAdmin && (
+                      <div>
+                        <select
+                          value={morningShift?.consultantId || ''}
+                          onChange={(e) => onUpdateShift(dateStr, 'Morning', e.target.value || null)}
+                          className="bg-surface-container border-none text-xs rounded-lg px-3 py-1 font-medium text-on-surface focus:ring-1 focus:ring-primary outline-none"
+                        >
+                          <option value="">Assign consultant...</option>
+                          {consultants.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
 
                   {/* Evening Shift */}
@@ -298,20 +304,22 @@ export default function DailyList({
                         )}
                       </div>
                     </div>
-                    <div>
-                      <select
-                        value={eveningShift?.consultantId || ''}
-                        onChange={(e) => onUpdateShift(dateStr, 'Evening', e.target.value || null)}
-                        className="bg-surface-container border-none text-xs rounded-lg px-3 py-1 font-medium text-on-surface focus:ring-1 focus:ring-primary outline-none"
-                      >
-                        <option value="">Assign consultant...</option>
-                        {consultants.map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {isAdmin && (
+                      <div>
+                        <select
+                          value={eveningShift?.consultantId || ''}
+                          onChange={(e) => onUpdateShift(dateStr, 'Evening', e.target.value || null)}
+                          className="bg-surface-container border-none text-xs rounded-lg px-3 py-1 font-medium text-on-surface focus:ring-1 focus:ring-primary outline-none"
+                        >
+                          <option value="">Assign consultant...</option>
+                          {consultants.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
 
                   {/* Night Shift */}
@@ -336,20 +344,22 @@ export default function DailyList({
                         )}
                       </div>
                     </div>
-                    <div>
-                      <select
-                        value={nightShift?.consultantId || ''}
-                        onChange={(e) => onUpdateShift(dateStr, 'Night', e.target.value || null)}
-                        className="bg-surface-container border-none text-xs rounded-lg px-3 py-1 font-medium text-on-surface focus:ring-1 focus:ring-primary outline-none"
-                      >
-                        <option value="">Assign consultant...</option>
-                        {consultants.map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {isAdmin && (
+                      <div>
+                        <select
+                          value={nightShift?.consultantId || ''}
+                          onChange={(e) => onUpdateShift(dateStr, 'Night', e.target.value || null)}
+                          className="bg-surface-container border-none text-xs rounded-lg px-3 py-1 font-medium text-on-surface focus:ring-1 focus:ring-primary outline-none"
+                        >
+                          <option value="">Assign consultant...</option>
+                          {consultants.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

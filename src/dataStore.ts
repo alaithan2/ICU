@@ -38,3 +38,29 @@ export function subscribeDataset<T>(
 export function saveDataset<T>(name: DatasetName, items: T[]) {
   return setDoc(doc(db, 'icu', name), { items });
 }
+
+// ---------------------------------------------------------------------------
+// App config (access control). Stored at icu/config = { admins: [email, …] }.
+// ---------------------------------------------------------------------------
+
+export interface AppConfig {
+  admins: string[];
+}
+
+export function subscribeConfig(
+  onChange: (config: AppConfig, exists: boolean) => void,
+  onError?: (err: unknown) => void
+) {
+  return onSnapshot(
+    doc(db, 'icu', 'config'),
+    snap => {
+      const data = snap.data() as { admins?: string[] } | undefined;
+      onChange({ admins: Array.isArray(data?.admins) ? data!.admins : [] }, snap.exists());
+    },
+    err => onError?.(err)
+  );
+}
+
+export function saveConfig(config: AppConfig) {
+  return setDoc(doc(db, 'icu', 'config'), config);
+}

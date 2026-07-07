@@ -13,6 +13,7 @@ interface MonthlyGridProps {
   consultants: Consultant[];
   shifts: Shift[];
   onSelectDate: (dateStr: string) => void;
+  readOnly?: boolean;
 }
 
 export default function MonthlyGrid({
@@ -20,7 +21,8 @@ export default function MonthlyGrid({
   currentMonth,
   consultants,
   shifts,
-  onSelectDate
+  onSelectDate,
+  readOnly = false
 }: MonthlyGridProps) {
   // Get number of days in the current selected month
   const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
@@ -103,8 +105,8 @@ export default function MonthlyGrid({
             <div
               key={`day-${day}`}
               id={`calendar-cell-${dayStr}`}
-              onClick={() => onSelectDate(dayStr)}
-              className={`h-24 p-1 rounded-xl border flex flex-col justify-between cursor-pointer transition-all duration-150 hover:bg-surface-container-low/60 active:scale-95 ${
+              onClick={readOnly ? undefined : () => onSelectDate(dayStr)}
+              className={`h-24 p-1 rounded-xl border flex flex-col justify-between transition-all duration-150 ${readOnly ? '' : 'cursor-pointer hover:bg-surface-container-low/60 active:scale-95'} ${
                 isToday
                   ? 'bg-primary/5 border-primary/50 ring-1 ring-primary/20'
                   : isWeekend

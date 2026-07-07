@@ -20,15 +20,21 @@ export interface Shift {
   consultantId: string | null;
 }
 
+export type LeaveType = 'Annual Leave' | 'Sick Leave' | 'Other';
+export type RequestKind = 'Leave' | 'OnCall';
+export type ShiftPreference = ShiftType | 'Any';
+
 export interface LeaveRequest {
   id: string;
   consultantId: string;
   consultantName: string;
-  type: 'Annual Leave' | 'Sick Leave' | 'Study Leave' | 'Other';
+  type: LeaveType;
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
   status: 'Pending' | 'Approved' | 'Rejected';
   reason: string;
+  kind?: RequestKind; // 'Leave' (default) or 'OnCall' preference
+  shift?: ShiftPreference; // requested shift for on-call preferences
 }
 
 export interface Holiday {
