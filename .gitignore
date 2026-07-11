@@ -6,3 +6,9 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Editor settings (machine-specific)
+.vscode/
+
+# Local working docs (not part of the app)
+CODE_REVIEW_FINDINGS.md
