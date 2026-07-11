@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Consultant, Shift } from '../types';
 import { ChevronLeft, ChevronRight, CalendarCheck } from 'lucide-react';
 import MonthlyGrid from './MonthlyGrid';
@@ -25,6 +25,13 @@ interface RosterCalendarProps {
 export default function RosterCalendar({ currentYear, currentMonth, consultants, shifts }: RosterCalendarProps) {
   const [year, setYear] = useState(currentYear);
   const [month, setMonth] = useState(currentMonth);
+
+  // Follow the top month/year selector: when it changes, jump the roster there.
+  // The arrows can still browse away from that point afterwards.
+  useEffect(() => {
+    setYear(currentYear);
+    setMonth(currentMonth);
+  }, [currentYear, currentMonth]);
 
   const goPrev = () => {
     if (month === 0) {

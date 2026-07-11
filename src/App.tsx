@@ -104,9 +104,30 @@ export default function App() {
   }, [authUser]);
 
   const email = authUser?.email?.toLowerCase() ?? '';
-  const isAdmin = !!email && admins.some(a => a.toLowerCase() === email);
+  const realIsAdmin = !!email && admins.some(a => a.toLowerCase() === email);
   // Admins are implicitly members.
-  const isMember = isAdmin || (!!email && members.some(m => m.toLowerCase() === email));
+  const realIsMember = realIsAdmin || (!!email && members.some(m => m.toLowerCase() === email));
+
+  // Dev-only role preview: `?as=member` forces the member view and `?as=admin`
+  // the admin view, so a single admin account can eyeball both layouts without
+  // a second Google login. Compiled out of production builds (import.meta.env.DEV).
+  const devAs = import.meta.env.DEV
+    ? new URLSearchParams(window.location.search).get('as')
+    : null;
+  const isAdmin = devAs === 'member' ? false : devAs === 'admin' ? true : realIsAdmin;
+  // A previewed member is still a member (so the app renders rather than showing
+  // the "access pending" gate).
+  const isMember = devAs === 'member' ? true : realIsMember;
+
+  // Which top-level tabs each role may open. Admins see everything; regular
+  // members get a read-only slice: the published roster, their own requests,
+  // department analytics, and their personal settings.
+  const ADMIN_TABS: Tab[] = ['Schedule', 'Roster', 'Vacations', 'Requests', 'Analytics', 'Settings'];
+  const MEMBER_TABS: Tab[] = ['Roster', 'Vacations', 'Requests', 'Analytics', 'Settings'];
+  const visibleTabs = isAdmin ? ADMIN_TABS : MEMBER_TABS;
+  // Never render a tab the current role can't access (e.g. the default
+  // 'Schedule' for a member) — fall back to the first tab they're allowed.
+  const effectiveTab: Tab = visibleTabs.includes(activeTab) ? activeTab : visibleTabs[0];
 
   const handleSignOut = () => {
     signOut(auth);
@@ -645,7 +666,7 @@ export default function App() {
       <main className="pt-20 px-4 max-w-2xl mx-auto space-y-6">
         {/* Tab-specific Page Header */}
         <section className="space-y-4">
-          {activeTab === 'Schedule' && (
+          {effectiveTab === 'Schedule' && (
             <>
               <p className="text-primary font-bold text-label-caps uppercase tracking-wider">
                 ICU ROTA CYCLE
@@ -688,7 +709,7 @@ export default function App() {
             </>
           )}
 
-          {activeTab === 'Roster' && (
+          {effectiveTab === 'Roster' && (
             <>
               <p className="text-primary font-bold text-label-caps uppercase tracking-wider">
                 PUBLISHED ROTA
@@ -702,7 +723,7 @@ export default function App() {
             </>
           )}
 
-          {activeTab === 'Vacations' && (
+          {effectiveTab === 'Vacations' && (
             <>
               <p className="text-primary font-bold text-label-caps uppercase tracking-wider">
                 APPROVED LEAVE
@@ -716,7 +737,7 @@ export default function App() {
             </>
           )}
 
-          {activeTab === 'Requests' && (
+          {effectiveTab === 'Requests' && (
             <>
               <p className="text-primary font-bold text-label-caps uppercase tracking-wider">
                 STAFF PREFERENCES
@@ -730,7 +751,7 @@ export default function App() {
             </>
           )}
 
-          {activeTab === 'Analytics' && (
+          {effectiveTab === 'Analytics' && (
             <>
               <p className="text-primary font-bold text-label-caps uppercase tracking-wider">
                 STAFF STATISTICS
@@ -744,7 +765,7 @@ export default function App() {
             </>
           )}
 
-          {activeTab === 'Settings' && (
+          {effectiveTab === 'Settings' && (
             <>
               <p className="text-primary font-bold text-label-caps uppercase tracking-wider">
                 ADMINISTRATIVE CONTROL
@@ -758,7 +779,7 @@ export default function App() {
 
         {/* Dynamic Views Router */}
         <section className="pb-16">
-          {activeTab === 'Schedule' && scheduleSubTab === 'DailyList' && (
+          {effectiveTab === 'Schedule' && scheduleSubTab === 'DailyList' && (
             <DailyList
               currentYear={currentYear}
               currentMonth={currentMonth}
@@ -771,7 +792,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'Schedule' && scheduleSubTab === 'MonthlyGrid' && (
+          {effectiveTab === 'Schedule' && scheduleSubTab === 'MonthlyGrid' && (
             <MonthlyGrid
               currentYear={currentYear}
               currentMonth={currentMonth}
@@ -781,7 +802,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'Schedule' && scheduleSubTab === 'ManualBuilder' && isAdmin && (
+          {effectiveTab === 'Schedule' && scheduleSubTab === 'ManualBuilder' && isAdmin && (
             <ManualBuilder
               consultants={consultants}
               shifts={shifts}
@@ -790,7 +811,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'Roster' && (
+          {effectiveTab === 'Roster' && (
             <RosterCalendar
               currentYear={currentYear}
               currentMonth={currentMonth}
@@ -799,7 +820,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'Vacations' && (
+          {effectiveTab === 'Vacations' && (
             <VacationCalendar
               currentYear={currentYear}
               currentMonth={currentMonth}
@@ -808,7 +829,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'Requests' && (
+          {effectiveTab === 'Requests' && (
             <LeaveRequests
               currentYear={currentYear}
               currentMonth={currentMonth}
@@ -825,7 +846,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'Analytics' && (
+          {effectiveTab === 'Analytics' && (
             <Analytics
               currentYear={currentYear}
               currentMonth={currentMonth}
@@ -835,7 +856,7 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'Settings' && (
+          {effectiveTab === 'Settings' && (
             <Settings
               consultants={consultants}
               holidays={holidays}
@@ -868,9 +889,9 @@ export default function App() {
           { tab: 'Requests', icon: ClipboardList, label: 'Requests' },
           { tab: 'Analytics', icon: BarChart3, label: 'Analytics' },
           { tab: 'Settings', icon: SettingsIcon, label: 'Settings' }
-        ].map(item => {
+        ].filter(item => visibleTabs.includes(item.tab as Tab)).map(item => {
           const Icon = item.icon;
-          const isActive = activeTab === item.tab;
+          const isActive = effectiveTab === item.tab;
           return (
             <button
               key={item.tab}
