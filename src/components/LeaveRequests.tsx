@@ -34,6 +34,7 @@ interface LeaveRequestsProps {
   isAdmin: boolean;
   currentUserId: string;
   currentUserName: string;
+  currentUserEmail: string;
 }
 
 type SubTab = 'List' | 'SubmitNew';
@@ -50,7 +51,8 @@ export default function LeaveRequests({
   onDeleteLeave,
   isAdmin,
   currentUserId,
-  currentUserName
+  currentUserName,
+  currentUserEmail
 }: LeaveRequestsProps) {
   const [subTab, setSubTab] = useState<SubTab>('List');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -74,12 +76,13 @@ export default function LeaveRequests({
 
   const today = todayStr();
 
+  // Reversed ranges (end before start) yield 0, not a misleading positive count.
   const calculateDays = () => {
     if (!startDate || !endDate) return 0;
     const s = new Date(startDate);
     const e = new Date(endDate);
-    const diffDays = Math.ceil(Math.abs(e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
-    return isNaN(diffDays) ? 0 : diffDays;
+    const diffDays = Math.ceil((e.getTime() - s.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    return isNaN(diffDays) || diffDays < 1 ? 0 : diffDays;
   };
 
   const resetForm = () => {
@@ -117,10 +120,23 @@ export default function LeaveRequests({
     if (requestKind === 'Leave' && (!startDate || !endDate)) return;
     if (requestKind === 'OnCall' && (!onCallStart || !onCallEnd)) return;
 
+    // Guard against reversed ranges (the end-date input's `min` also blocks this
+    // in most browsers, but validate on submit to be safe).
+    if (requestKind === 'Leave' && endDate < startDate) {
+      alert('The end date cannot be before the start date.');
+      return;
+    }
+    if (requestKind === 'OnCall' && onCallEnd < onCallStart) {
+      alert('The "to" date cannot be before the "from" date.');
+      return;
+    }
+
     const editing = editingId ? leaves.find(l => l.id === editingId) : null;
 
     // Identity: keep the original when editing; otherwise admin picks a
-    // consultant, and regular users file under their own account.
+    // consultant, and regular users file under the consultant profile linked to
+    // their sign-in (so analytics/vacation views attribute the leave), falling
+    // back to their raw account if no profile is linked yet.
     let cid: string;
     let cname: string;
     if (editing) {
@@ -132,8 +148,11 @@ export default function LeaveRequests({
       cid = leaveConsultantId;
       cname = c ? c.name : 'Unknown';
     } else {
-      cid = currentUserId;
-      cname = currentUserName;
+      const mine = currentUserEmail
+        ? consultants.find(c => c.userEmail && c.userEmail.toLowerCase() === currentUserEmail.toLowerCase())
+        : undefined;
+      cid = mine ? mine.id : currentUserId;
+      cname = mine ? mine.name : currentUserName;
     }
 
     const type: LeaveType = requestKind === 'OnCall' ? 'Other' : leaveType;
@@ -141,11 +160,11 @@ export default function LeaveRequests({
     const end = requestKind === 'OnCall' ? onCallEnd : endDate;
 
     if (editing) {
+      // Spread the original first so submitter/ownership fields are preserved.
       const updated: LeaveRequest = {
-        id: editing.id,
+        ...editing,
         consultantId: cid,
         consultantName: cname,
-        status: editing.status,
         type,
         startDate: start,
         endDate: end,
@@ -153,6 +172,7 @@ export default function LeaveRequests({
         kind: requestKind
       };
       if (requestKind === 'OnCall') updated.shift = onCallShift;
+      else delete updated.shift;
       onUpdateLeave(updated);
     } else {
       onSubmitLeave(cid, cname, type, start, end, reason, requestKind, requestKind === 'OnCall' ? onCallShift : undefined);
@@ -189,8 +209,25 @@ export default function LeaveRequests({
     return 'text-tertiary bg-tertiary-fixed/40 border-tertiary/20';
   };
 
+  // The consultant profile linked to the signed-in member, if any.
+  const myConsultantId = currentUserEmail
+    ? consultants.find(c => c.userEmail && c.userEmail.toLowerCase() === currentUserEmail.toLowerCase())?.id
+    : undefined;
+
+  // A request "belongs" to the member if they submitted it, if it's filed under
+  // their raw account (legacy), or if it's about their linked consultant profile.
+  const isMine = (r: LeaveRequest) =>
+    r.submittedByUid === currentUserId ||
+    r.consultantId === currentUserId ||
+    (!!myConsultantId && r.consultantId === myConsultantId);
+
+  // They can only cancel/edit requests they actually submitted (matches the
+  // Firestore rules, which key ownership off submittedByUid / legacy uid).
+  const canModify = (r: LeaveRequest) =>
+    r.submittedByUid === currentUserId || r.consultantId === currentUserId;
+
   // Admins see every request; regular users only their own.
-  const visibleLeaves = isAdmin ? leaves : leaves.filter(r => r.consultantId === currentUserId);
+  const visibleLeaves = isAdmin ? leaves : leaves.filter(isMine);
   const pendingRequests = visibleLeaves.filter(r => r.status === 'Pending');
   const pastRequests = visibleLeaves.filter(r => r.status !== 'Pending');
 
@@ -362,12 +399,14 @@ export default function LeaveRequests({
                   {req.status === 'Pending' && (
                     <div className="flex items-center justify-between">
                       <p className="text-label-sm text-on-surface-variant">Awaiting administrator approval.</p>
-                      <button
-                        onClick={() => { if (window.confirm('Cancel this request?')) onDeleteLeave(req.id); }}
-                        className="text-label-sm text-error font-semibold hover:underline cursor-pointer"
-                      >
-                        Cancel
-                      </button>
+                      {canModify(req) && (
+                        <button
+                          onClick={() => { if (window.confirm('Cancel this request?')) onDeleteLeave(req.id); }}
+                          className="text-label-sm text-error font-semibold hover:underline cursor-pointer"
+                        >
+                          Cancel
+                        </button>
+                      )}
                     </div>
                   )}
                   {req.status === 'Approved' && <p className="text-label-sm text-secondary font-semibold">✓ Approved by the administrator.</p>}
@@ -488,7 +527,7 @@ export default function LeaveRequests({
                   <label className="text-label-caps text-on-surface-variant uppercase font-bold text-[11px] flex items-center gap-1">
                     <Calendar className="w-3.5 h-3.5 text-primary" /> End Date
                   </label>
-                  <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} required
+                  <input type="date" value={endDate} min={startDate || undefined} onChange={(e) => setEndDate(e.target.value)} required
                     className="bg-surface-container border-none text-body-md rounded-xl p-4 text-on-surface focus:ring-2 focus:ring-primary outline-none cursor-pointer w-full" />
                 </div>
               </div>

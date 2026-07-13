@@ -9,6 +9,10 @@ export interface Consultant {
   role: string;
   avatar: string;
   active: boolean;
+  // Login link: the Google account email that "is" this consultant. When a
+  // member submits leave, we file it under the consultant profile whose
+  // userEmail matches their sign-in, so analytics/vacation views attribute it.
+  userEmail?: string;
 }
 
 export type ShiftType = 'Morning' | 'Evening' | 'Night';
@@ -35,6 +39,11 @@ export interface LeaveRequest {
   reason: string;
   kind?: RequestKind; // 'Leave' (default) or 'OnCall' preference
   shift?: ShiftPreference; // requested shift for on-call preferences
+  // Who actually submitted this request (Firebase auth identity). Ownership for
+  // security rules and "my requests" is tracked here, independent of which
+  // consultant profile (consultantId) the request is about.
+  submittedByUid?: string;
+  submittedByEmail?: string;
 }
 
 export interface Holiday {

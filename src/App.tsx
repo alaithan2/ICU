@@ -7,7 +7,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Consultant, Shift, ShiftType, LeaveRequest, Holiday, LeaveType, RequestKind, ShiftPreference } from './types';
 import {
   subscribeDataset, saveDataset, subscribeConfig, saveConfig,
-  subscribeRequests, saveRequest, deleteRequest, migrateLegacyLeaves
+  subscribeRequests, saveRequest, deleteRequest, migrateLegacyLeaves, restoreRequests
 } from './dataStore';
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
@@ -339,6 +339,12 @@ export default function App() {
     };
     // Only include `shift` when set — Firestore rejects undefined values.
     if (shift) newRequest.shift = shift;
+    // Stamp the actual submitter (independent of which consultant profile the
+    // request is about) — security rules and "my requests" key off this.
+    if (authUser) {
+      newRequest.submittedByUid = authUser.uid;
+      if (authUser.email) newRequest.submittedByEmail = authUser.email.toLowerCase();
+    }
 
     saveRequest(newRequest);
   };
@@ -352,7 +358,7 @@ export default function App() {
   };
 
   // 4. Consultants CRUD
-  const handleAddConsultant = (name: string, role: string, avatar?: string) => {
+  const handleAddConsultant = (name: string, role: string, avatar?: string, userEmail?: string) => {
     const newC: Consultant = {
       id: `c-${Date.now()}`,
       name,
@@ -360,7 +366,24 @@ export default function App() {
       avatar: avatar || 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?q=80&w=200&auto=format&fit=crop',
       active: true
     };
+    const linked = userEmail?.trim().toLowerCase();
+    if (linked) newC.userEmail = linked;
     const updated = [...consultants, newC];
+    setConsultants(updated);
+    saveDataset('consultants', updated);
+  };
+
+  // Link (or unlink) a consultant to a login email so members' requests are
+  // attributed to their profile. Passing an empty string clears the link.
+  const handleUpdateConsultant = (id: string, userEmail: string) => {
+    const linked = userEmail.trim().toLowerCase();
+    const updated = consultants.map(c => {
+      if (c.id !== id) return c;
+      const next = { ...c };
+      if (linked) next.userEmail = linked;
+      else delete next.userEmail;
+      return next;
+    });
     setConsultants(updated);
     saveDataset('consultants', updated);
   };
@@ -557,34 +580,80 @@ export default function App() {
     URL.revokeObjectURL(url);
   };
 
-  // Restore all app data from a previously exported JSON backup file.
+  // Restore all app data from a previously exported JSON backup file. The
+  // restore truly mirrors the backup: single-document datasets are overwritten,
+  // and the requests collection has entries missing from the backup deleted (not
+  // just the imported ones added).
   const handleImportData = (file: File) => {
     const reader = new FileReader();
     reader.onload = () => {
+      let parsed: unknown;
       try {
-        const parsed = JSON.parse(String(reader.result));
-        const nextConsultants = Array.isArray(parsed?.consultants) ? parsed.consultants : null;
-        const nextShifts = Array.isArray(parsed?.shifts) ? parsed.shifts : null;
-        const nextLeaves = Array.isArray(parsed?.leaves) ? parsed.leaves : null;
-        const nextHolidays = Array.isArray(parsed?.holidays) ? parsed.holidays : null;
-
-        if (!nextConsultants && !nextShifts && !nextLeaves && !nextHolidays) {
-          throw new Error('No recognizable ICU data found in this file.');
-        }
-        if (!window.confirm('Importing will REPLACE all current data (consultants, shifts, leaves, holidays) with this backup. Continue?')) {
-          return;
-        }
-
-        if (nextConsultants) { setConsultants(nextConsultants); saveDataset('consultants', nextConsultants); }
-        if (nextShifts) { setShifts(nextShifts); saveDataset('shifts', nextShifts); }
-        if (nextHolidays) { setHolidays(nextHolidays); saveDataset('holidays', nextHolidays); }
-        // Requests live in their own collection — write each one.
-        if (nextLeaves) { (nextLeaves as LeaveRequest[]).forEach(r => saveRequest(r)); }
-
-        alert('Backup imported successfully.');
-      } catch (err) {
-        alert('Could not import this file. Make sure it is an ICU backup exported from this app.\n\n' + (err instanceof Error ? err.message : ''));
+        parsed = JSON.parse(String(reader.result));
+      } catch {
+        alert('Could not read this file — it is not valid JSON. Make sure it is an ICU backup exported from this app.');
+        return;
       }
+
+      const p = parsed as Record<string, unknown>;
+      const nextConsultants = Array.isArray(p?.consultants) ? (p.consultants as Consultant[]) : null;
+      const nextShifts = Array.isArray(p?.shifts) ? (p.shifts as Shift[]) : null;
+      const nextLeaves = Array.isArray(p?.leaves) ? (p.leaves as LeaveRequest[]) : null;
+      const nextHolidays = Array.isArray(p?.holidays) ? (p.holidays as Holiday[]) : null;
+
+      if (!nextConsultants && !nextShifts && !nextLeaves && !nextHolidays) {
+        alert('No recognizable ICU data found in this file. Make sure it is an ICU backup exported from this app.');
+        return;
+      }
+
+      // Validate requests before touching the cloud: every request needs an id,
+      // and ids must be unique (they become Firestore document keys).
+      if (nextLeaves) {
+        const ids = new Set<string>();
+        for (const r of nextLeaves) {
+          if (!r || typeof r.id !== 'string' || !r.id) {
+            alert('This backup contains a leave/on-call request with no id and cannot be imported safely.');
+            return;
+          }
+          if (ids.has(r.id)) {
+            alert(`This backup contains duplicate request id "${r.id}" and cannot be imported safely.`);
+            return;
+          }
+          ids.add(r.id);
+        }
+      }
+
+      const summary = [
+        nextConsultants && `${nextConsultants.length} consultants`,
+        nextShifts && `${nextShifts.length} shifts`,
+        nextHolidays && `${nextHolidays.length} holidays`,
+        nextLeaves && `${nextLeaves.length} requests`
+      ].filter(Boolean).join(', ');
+
+      if (!window.confirm(
+        `This will REPLACE your current data with the backup (${summary}). ` +
+        `Existing requests not present in the backup will be deleted. Continue?`
+      )) {
+        return;
+      }
+
+      (async () => {
+        try {
+          if (nextConsultants) { setConsultants(nextConsultants); await saveDataset('consultants', nextConsultants); }
+          if (nextShifts) { setShifts(nextShifts); await saveDataset('shifts', nextShifts); }
+          if (nextHolidays) { setHolidays(nextHolidays); await saveDataset('holidays', nextHolidays); }
+
+          let requestNote = '';
+          if (nextLeaves) {
+            const { written, deleted } = await restoreRequests(nextLeaves);
+            requestNote = `\nRequests: ${written} restored, ${deleted} removed.`;
+          }
+
+          alert('Backup restored successfully.' + requestNote);
+        } catch (err) {
+          alert('The restore failed partway through. Some data may not have been updated.\n\n' + (err instanceof Error ? err.message : ''));
+        }
+      })();
     };
     reader.onerror = () => alert('Failed to read the selected file.');
     reader.readAsText(file);
@@ -843,6 +912,7 @@ export default function App() {
               isAdmin={isAdmin}
               currentUserId={authUser.uid}
               currentUserName={authUser.displayName || authUser.email || 'User'}
+              currentUserEmail={authUser.email || ''}
             />
           )}
 
@@ -863,6 +933,7 @@ export default function App() {
               darkMode={darkMode}
               onToggleDarkMode={handleToggleDarkMode}
               onAddConsultant={handleAddConsultant}
+              onUpdateConsultant={handleUpdateConsultant}
               onDeleteConsultant={handleDeleteConsultant}
               onAddHoliday={handleAddHoliday}
               onDeleteHoliday={handleDeleteHoliday}

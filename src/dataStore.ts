@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { collection, deleteDoc, doc, getDoc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from './firebase';
 import { LeaveRequest } from './types';
 
@@ -61,6 +61,27 @@ export function saveRequest(request: LeaveRequest) {
 
 export function deleteRequest(id: string) {
   return deleteDoc(doc(db, 'requests', id));
+}
+
+/**
+ * Replace the entire requests collection with `imported` (used by backup
+ * restore). Unlike writing each imported request, this also deletes existing
+ * request documents that are absent from the backup, so a restore truly
+ * mirrors the file. Runs as an atomic batch. Returns created/deleted counts.
+ */
+export async function restoreRequests(
+  imported: LeaveRequest[]
+): Promise<{ written: number; deleted: number }> {
+  const snap = await getDocs(collection(db, 'requests'));
+  const importedIds = new Set(imported.map(r => r.id));
+  const toDelete = snap.docs.filter(d => !importedIds.has(d.id));
+
+  const batch = writeBatch(db);
+  toDelete.forEach(d => batch.delete(d.ref));
+  imported.forEach(r => batch.set(doc(db, 'requests', r.id), r));
+  await batch.commit();
+
+  return { written: imported.length, deleted: toDelete.length };
 }
 
 /**

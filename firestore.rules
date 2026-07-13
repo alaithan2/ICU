@@ -41,13 +41,18 @@ service cloud.firestore {
     }
 
     // Requests: members read; a user may create and cancel/edit their OWN pending
-    // request; admins manage every request.
+    // request; admins manage every request. Ownership is the submitting account
+    // (submittedByUid), independent of which consultant profile the request is
+    // filed under. `consultantId == uid` is kept as a fallback for legacy
+    // requests created before submittedByUid existed.
     match /requests/{reqId} {
       allow read: if isMember();
       allow create: if isAdmin()
-        || (isMember() && request.resource.data.consultantId == request.auth.uid);
+        || (isMember() && request.resource.data.get('submittedByUid', '') == request.auth.uid);
       allow update, delete: if isAdmin()
-        || (isMember() && resource.data.consultantId == request.auth.uid
+        || (isMember()
+            && (resource.data.get('submittedByUid', '') == request.auth.uid
+                || resource.data.consultantId == request.auth.uid)
             && resource.data.status == 'Pending');
     }
   }

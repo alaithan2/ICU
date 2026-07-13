@@ -5,7 +5,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Consultant, Holiday } from '../types';
-import { Sun, Moon, Plus, Trash2, ShieldAlert, Check, Heart, UserPlus, Sparkles, X, Download, Upload, LogOut, UserCircle, Power } from 'lucide-react';
+import { Sun, Moon, Plus, Trash2, ShieldAlert, Check, Heart, UserPlus, Sparkles, X, Download, Upload, LogOut, UserCircle, Power, Mail } from 'lucide-react';
 import { getConsultantColor, getInitials } from '../utils/consultantColors';
 
 interface SettingsProps {
@@ -13,7 +13,8 @@ interface SettingsProps {
   holidays: Holiday[];
   darkMode: boolean;
   onToggleDarkMode: () => void;
-  onAddConsultant: (name: string, role: string, avatar?: string) => void;
+  onAddConsultant: (name: string, role: string, avatar?: string, userEmail?: string) => void;
+  onUpdateConsultant: (id: string, userEmail: string) => void;
   onDeleteConsultant: (id: string) => void;
   onAddHoliday: (name: string, date: string) => void;
   onDeleteHoliday: (id: string) => void;
@@ -34,6 +35,7 @@ export default function Settings({
   darkMode,
   onToggleDarkMode,
   onAddConsultant,
+  onUpdateConsultant,
   onDeleteConsultant,
   onAddHoliday,
   onDeleteHoliday,
@@ -111,6 +113,21 @@ export default function Settings({
   const [newConsultantName, setNewConsultantName] = useState('');
   const [newConsultantRole, setNewConsultantRole] = useState('Senior Consultant');
   const [newConsultantAvatar, setNewConsultantAvatar] = useState('');
+  const [newConsultantEmail, setNewConsultantEmail] = useState('');
+
+  // Which consultant's login-email field is currently being edited inline.
+  const [linkingId, setLinkingId] = useState<string | null>(null);
+  const [linkEmail, setLinkEmail] = useState('');
+
+  const startLinking = (id: string, current?: string) => {
+    setLinkingId(id);
+    setLinkEmail(current ?? '');
+  };
+  const saveLink = () => {
+    if (linkingId) onUpdateConsultant(linkingId, linkEmail);
+    setLinkingId(null);
+    setLinkEmail('');
+  };
 
   const [showAddHolidayModal, setShowAddHolidayModal] = useState(false);
   const [newHolidayName, setNewHolidayName] = useState('');
@@ -119,10 +136,11 @@ export default function Settings({
   const handleAddConsultantSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newConsultantName) return;
-    onAddConsultant(newConsultantName, newConsultantRole, newConsultantAvatar);
+    onAddConsultant(newConsultantName, newConsultantRole, newConsultantAvatar, newConsultantEmail);
     setNewConsultantName('');
     setNewConsultantRole('Senior Consultant');
     setNewConsultantAvatar('');
+    setNewConsultantEmail('');
     setShowAddConsultantModal(false);
   };
 
@@ -186,28 +204,65 @@ export default function Settings({
           {consultants.map(c => (
             <div
               key={c.id}
-              className="flex items-center justify-between px-4 py-3 group hover:bg-surface-container-high/40 transition-colors"
+              className="px-4 py-3 group hover:bg-surface-container-high/40 transition-colors space-y-2"
             >
-              <div className="flex items-center gap-3">
-                <div className="relative shrink-0">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${getConsultantColor(consultants, c.id).solid}`}>
-                    {getInitials(c.name)}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="relative shrink-0">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${getConsultantColor(consultants, c.id).solid}`}>
+                      {getInitials(c.name)}
+                    </div>
+                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#34c759] border-2 border-surface-container-low rounded-full" />
                   </div>
-                  <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#34c759] border-2 border-surface-container-low rounded-full" />
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-body-lg font-bold text-on-surface truncate">{c.name}</span>
+                    <span className="text-label-sm font-label-sm text-on-surface-variant truncate">{c.role}</span>
+                  </div>
                 </div>
-                <div className="flex flex-col min-w-0">
-                  <span className="text-body-lg font-bold text-on-surface truncate">{c.name}</span>
-                  <span className="text-label-sm font-label-sm text-on-surface-variant truncate">{c.role}</span>
-                </div>
+                <button
+                  onClick={() => onDeleteConsultant(c.id)}
+                  disabled={consultants.length <= 2} // Safety block so we always have consultants
+                  className="text-error/70 hover:text-error p-1 hover:bg-error-container/20 rounded-lg active:scale-95 transition-transform disabled:opacity-30 cursor-pointer shrink-0"
+                  title="Remove Consultant"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
-              <button
-                onClick={() => onDeleteConsultant(c.id)}
-                disabled={consultants.length <= 2} // Safety block so we always have consultants
-                className="text-error/70 hover:text-error p-1 hover:bg-error-container/20 rounded-lg active:scale-95 transition-transform disabled:opacity-30 cursor-pointer"
-                title="Remove Consultant"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
+
+              {/* Login link — attributes this profile to a Google account so that
+                  account's own leave requests count towards this consultant. */}
+              {linkingId === c.id ? (
+                <form
+                  onSubmit={(e) => { e.preventDefault(); saveLink(); }}
+                  className="flex items-center gap-2 pl-1"
+                >
+                  <input
+                    type="email"
+                    autoFocus
+                    value={linkEmail}
+                    onChange={(e) => setLinkEmail(e.target.value)}
+                    placeholder="consultant@gmail.com"
+                    className="flex-1 min-w-0 bg-surface-container border-none rounded-lg px-3 py-2 text-body-md text-on-surface focus:ring-2 focus:ring-primary outline-none"
+                  />
+                  <button type="submit" title="Save link" className="shrink-0 p-2 rounded-lg text-secondary hover:bg-secondary/10 active:scale-90 transition-all cursor-pointer">
+                    <Check className="w-4 h-4" />
+                  </button>
+                  <button type="button" onClick={() => setLinkingId(null)} title="Cancel" className="shrink-0 p-2 rounded-lg text-on-surface-variant hover:bg-surface-container-high active:scale-90 transition-all cursor-pointer">
+                    <X className="w-4 h-4" />
+                  </button>
+                </form>
+              ) : (
+                <button
+                  onClick={() => startLinking(c.id, c.userEmail)}
+                  className={`flex items-center gap-2 text-label-sm pl-1 rounded-md active:scale-95 transition-transform cursor-pointer ${
+                    c.userEmail ? 'text-on-surface-variant hover:text-primary' : 'text-outline hover:text-primary'
+                  }`}
+                  title="Link a login email"
+                >
+                  <Mail className="w-3.5 h-3.5 shrink-0" />
+                  <span className="truncate">{c.userEmail || 'Link a login email'}</span>
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -475,6 +530,16 @@ export default function Settings({
                   <option value="Assistant Consultant">Assistant Consultant</option>
                   <option value="Fellow">Fellow</option>
                 </select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Login Email (Optional)</label>
+                <input
+                  type="email"
+                  placeholder="Their Google account, to attribute their leave"
+                  value={newConsultantEmail}
+                  onChange={(e) => setNewConsultantEmail(e.target.value)}
+                  className="bg-surface-container border-none rounded-xl p-4 text-body-md text-on-surface focus:ring-2 focus:ring-primary outline-none"
+                />
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Avatar Photo URL (Optional)</label>
