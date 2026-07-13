@@ -61,7 +61,9 @@ export default function LeaveRequests({
   const [requestKind, setRequestKind] = useState<RequestKind>('Leave');
 
   // Shared / leave fields
-  const [leaveConsultantId, setLeaveConsultantId] = useState<string>(consultants[0]?.id || '');
+  const [leaveConsultantId, setLeaveConsultantId] = useState<string>(
+    consultants.find(c => c.active)?.id || consultants[0]?.id || ''
+  );
   const [leaveType, setLeaveType] = useState<LeaveType>('Annual Leave');
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
@@ -466,8 +468,8 @@ export default function LeaveRequests({
                 className="bg-surface-container border-none text-body-md rounded-xl p-4 text-on-surface focus:ring-2 focus:ring-primary outline-none cursor-pointer w-full font-semibold"
                 required
               >
-                {consultants.length === 0 && <option value="">No consultants — add some in Settings</option>}
-                {consultants.map(c => (
+                {consultants.filter(c => c.active).length === 0 && <option value="">No active consultants — add some in Settings</option>}
+                {consultants.filter(c => c.active).map(c => (
                   <option key={c.id} value={c.id}>{c.name} ({c.role})</option>
                 ))}
               </select>

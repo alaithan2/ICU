@@ -49,6 +49,9 @@ export default function ManualBuilder({
   };
 
   const currentAssignedConsultant = consultants.find(c => c.id === selectedConsultantId);
+  // Only active consultants are assignable, but keep whoever is already assigned
+  // (even if archived) so an existing assignment still shows and can be changed.
+  const selectableConsultants = consultants.filter(c => c.active || c.id === selectedConsultantId);
 
   return (
     <div id="manual-builder-view" className="bg-surface-container-lowest p-4 rounded-xl shadow-sm border border-outline-variant/20 space-y-4">
@@ -119,9 +122,9 @@ export default function ManualBuilder({
             className="bg-surface-container border-none text-body-md rounded-xl p-4 text-on-surface focus:ring-2 focus:ring-primary outline-none cursor-pointer w-full font-medium"
           >
             <option value="">-- Unassigned (Empty Shift) --</option>
-            {consultants.map((c) => (
+            {selectableConsultants.map((c) => (
               <option key={c.id} value={c.id}>
-                {c.name} ({c.role})
+                {c.name} ({c.role}){c.active ? '' : ' — archived'}
               </option>
             ))}
           </select>

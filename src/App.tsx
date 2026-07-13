@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Consultant, Shift, ShiftType, LeaveRequest, Holiday, LeaveType, RequestKind, ShiftPreference } from './types';
 import {
   subscribeDataset, saveDataset, subscribeConfig, saveConfig,
@@ -373,6 +373,24 @@ export default function App() {
     saveDataset('consultants', updated);
   };
 
+  // Consultant IDs referenced by any shift or request — deleting such a profile
+  // would orphan that history, so those may only be archived, not hard-deleted.
+  const consultantIdsInUse = useMemo(() => {
+    const inUse = new Set<string>();
+    shifts.forEach(s => { if (s.consultantId) inUse.add(s.consultantId); });
+    leaves.forEach(l => inUse.add(l.consultantId));
+    return inUse;
+  }, [shifts, leaves]);
+
+  // Archive (active:false) or restore (active:true) a consultant. Archived
+  // consultants stay in historical schedules/exports but drop out of the
+  // pickers for new shifts and leave.
+  const handleSetConsultantActive = (id: string, active: boolean) => {
+    const updated = consultants.map(c => (c.id === id ? { ...c, active } : c));
+    setConsultants(updated);
+    saveDataset('consultants', updated);
+  };
+
   // Link (or unlink) a consultant to a login email so members' requests are
   // attributed to their profile. Passing an empty string clears the link.
   const handleUpdateConsultant = (id: string, userEmail: string) => {
@@ -389,6 +407,8 @@ export default function App() {
   };
 
   const handleDeleteConsultant = (id: string) => {
+    // Refuse to orphan history — such profiles must be archived instead.
+    if (consultantIdsInUse.has(id)) return;
     const updated = consultants.filter(c => c.id !== id);
     setConsultants(updated);
     saveDataset('consultants', updated);
@@ -934,6 +954,8 @@ export default function App() {
               onToggleDarkMode={handleToggleDarkMode}
               onAddConsultant={handleAddConsultant}
               onUpdateConsultant={handleUpdateConsultant}
+              onSetConsultantActive={handleSetConsultantActive}
+              consultantIdsInUse={consultantIdsInUse}
               onDeleteConsultant={handleDeleteConsultant}
               onAddHoliday={handleAddHoliday}
               onDeleteHoliday={handleDeleteHoliday}

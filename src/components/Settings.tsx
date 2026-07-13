@@ -5,7 +5,7 @@
 
 import React, { useState, useRef } from 'react';
 import { Consultant, Holiday } from '../types';
-import { Sun, Moon, Plus, Trash2, ShieldAlert, Check, Heart, UserPlus, Sparkles, X, Download, Upload, LogOut, UserCircle, Power, Mail } from 'lucide-react';
+import { Sun, Moon, Plus, Trash2, ShieldAlert, Check, Heart, UserPlus, Sparkles, X, Download, Upload, LogOut, UserCircle, Power, Mail, Archive, RotateCcw } from 'lucide-react';
 import { getConsultantColor, getInitials } from '../utils/consultantColors';
 
 interface SettingsProps {
@@ -15,6 +15,8 @@ interface SettingsProps {
   onToggleDarkMode: () => void;
   onAddConsultant: (name: string, role: string, avatar?: string, userEmail?: string) => void;
   onUpdateConsultant: (id: string, userEmail: string) => void;
+  onSetConsultantActive: (id: string, active: boolean) => void;
+  consultantIdsInUse: Set<string>;
   onDeleteConsultant: (id: string) => void;
   onAddHoliday: (name: string, date: string) => void;
   onDeleteHoliday: (id: string) => void;
@@ -36,6 +38,8 @@ export default function Settings({
   onToggleDarkMode,
   onAddConsultant,
   onUpdateConsultant,
+  onSetConsultantActive,
+  consultantIdsInUse,
   onDeleteConsultant,
   onAddHoliday,
   onDeleteHoliday,
@@ -201,32 +205,51 @@ export default function Settings({
           </button>
         </div>
         <div className="bg-surface-container-low rounded-xl overflow-hidden shadow-sm border border-outline-variant/10 divide-y divide-outline-variant/20">
-          {consultants.map(c => (
+          {consultants.map(c => {
+            const archived = !c.active;
+            const inUse = consultantIdsInUse.has(c.id);
+            return (
             <div
               key={c.id}
-              className="px-4 py-3 group hover:bg-surface-container-high/40 transition-colors space-y-2"
+              className={`px-4 py-3 group hover:bg-surface-container-high/40 transition-colors space-y-2 ${archived ? 'opacity-60' : ''}`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="relative shrink-0">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${getConsultantColor(consultants, c.id).solid}`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold ${getConsultantColor(consultants, c.id).solid} ${archived ? 'grayscale' : ''}`}>
                       {getInitials(c.name)}
                     </div>
-                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-[#34c759] border-2 border-surface-container-low rounded-full" />
+                    <div className={`absolute bottom-0 right-0 w-3 h-3 border-2 border-surface-container-low rounded-full ${archived ? 'bg-outline' : 'bg-[#34c759]'}`} />
                   </div>
                   <div className="flex flex-col min-w-0">
-                    <span className="text-body-lg font-bold text-on-surface truncate">{c.name}</span>
+                    <span className="text-body-lg font-bold text-on-surface truncate flex items-center gap-2">
+                      {c.name}
+                      {archived && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-surface-container-high text-on-surface-variant shrink-0">
+                          Archived
+                        </span>
+                      )}
+                    </span>
                     <span className="text-label-sm font-label-sm text-on-surface-variant truncate">{c.role}</span>
                   </div>
                 </div>
-                <button
-                  onClick={() => onDeleteConsultant(c.id)}
-                  disabled={consultants.length <= 2} // Safety block so we always have consultants
-                  className="text-error/70 hover:text-error p-1 hover:bg-error-container/20 rounded-lg active:scale-95 transition-transform disabled:opacity-30 cursor-pointer shrink-0"
-                  title="Remove Consultant"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => onSetConsultantActive(c.id, archived)}
+                    className="text-on-surface-variant hover:text-primary p-1 hover:bg-surface-container-high rounded-lg active:scale-95 transition-transform cursor-pointer"
+                    title={archived ? 'Restore consultant' : 'Archive consultant'}
+                  >
+                    {archived ? <RotateCcw className="w-4 h-4" /> : <Archive className="w-4 h-4" />}
+                  </button>
+                  <button
+                    onClick={() => onDeleteConsultant(c.id)}
+                    disabled={inUse}
+                    className="text-error/70 hover:text-error p-1 hover:bg-error-container/20 rounded-lg active:scale-95 transition-transform disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                    title={inUse ? 'Has schedule or leave history — archive instead of deleting' : 'Delete consultant permanently'}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               {/* Login link — attributes this profile to a Google account so that
@@ -264,7 +287,8 @@ export default function Settings({
                 </button>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       </section>
 
